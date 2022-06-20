@@ -2,6 +2,16 @@ import copy
 import torch
 from torch import nn
 
+def clamp(value, min_value = None, max_value = None):
+    assert exists(min_value) or exists(max_value)
+    if exists(min_value):
+        value = max(value, min_value)
+
+    if exists(max_value):
+        value = min(value, max_value)
+
+    return value
+
 class EMA(nn.Module):
     """
     Implements exponential moving average shadowing for your model.
