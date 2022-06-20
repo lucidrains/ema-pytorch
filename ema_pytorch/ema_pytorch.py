@@ -2,6 +2,9 @@ import copy
 import torch
 from torch import nn
 
+def exists(val):
+    return val is not None
+
 def clamp(value, min_value = None, max_value = None):
     assert exists(min_value) or exists(max_value)
     if exists(min_value):
