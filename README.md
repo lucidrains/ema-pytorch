@@ -41,3 +41,7 @@ ema_output = ema(data)
 # as it contains the number of steps taken (there is a warmup logic in there, recommended by @crowsonkb, validated for a number of projects now)
 # however, if you wish to access the copy of your model with EMA, then it will live at ema.ema_model
 ```
+
+## Todo
+
+- [ ] address the issue of annealing EMA to 1 near the end of training for BYOL https://github.com/lucidrains/byol-pytorch/issues/82
