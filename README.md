@@ -26,7 +26,7 @@ with torch.no_grad():
     net.weight.copy_(torch.randn_like(net.weight))
     net.bias.copy_(torch.randn_like(net.bias))
 
-# you will call the update function on your moving average
+# you will call the update function on your moving average wrapper
 
 ema.update()
 
@@ -39,4 +39,5 @@ ema_output = ema(data)
 
 # if you want to save your ema model, it is recommended you save the entire wrapper
 # as it contains the number of steps taken (there is a warmup logic in there, recommended by @crowsonkb, validated for a number of projects now)
+# however, if you wish to access the copy of your model with EMA, then it will live at ema.ema_model
 ```
