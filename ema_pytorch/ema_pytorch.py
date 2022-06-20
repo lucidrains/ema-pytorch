@@ -35,7 +35,12 @@ class EMA(nn.Module):
         super().__init__()
         self.beta = beta
         self.online_model = model
-        self.ema_model = copy.deepcopy(model)
+
+        try:
+            self.ema_model = copy.deepcopy(model)
+        except:
+            print('Your model was not copyable. Please make sure you are not using any LazyLinear')
+            exit()
 
         self.update_every = update_every
         self.update_after_step = update_after_step
