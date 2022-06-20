@@ -40,7 +40,3 @@ ema_output = ema(data)
 # if you want to save your ema model, it is recommended you save the entire wrapper
 # as it contains the number of steps taken (there is a warmup logic in there, recommended by @crowsonkb, validated for a number of projects now)
 ```
-
-## Todo
-
-- [ ] use a hook and automatically update the EMA (optional)
