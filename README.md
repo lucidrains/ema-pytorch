@@ -1,4 +1,4 @@
-# EMA (exponential moving average wrapper) - Pytorch
+## EMA - Pytorch
 
 A simple way to keep track of an Exponential Moving Average (EMA) version of your pytorch model
 
