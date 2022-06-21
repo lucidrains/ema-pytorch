@@ -55,6 +55,7 @@ class EMA(nn.Module):
             print('Your model was not copyable. Please make sure you are not using any LazyLinear')
             exit()
 
+        self.ema_model.requires_grad_(False)
         self.update_every = update_every
         self.update_after_step = update_after_step
 
