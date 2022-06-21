@@ -44,6 +44,7 @@ class EMA(nn.Module):
         inv_gamma = 1.0,
         power = 2 / 3,
         min_value = 0.0,
+        param_or_buffer_names_no_ema = set(),
     ):
         super().__init__()
         self.beta = beta
@@ -62,6 +63,9 @@ class EMA(nn.Module):
         self.inv_gamma = inv_gamma
         self.power = power
         self.min_value = min_value
+
+        assert isinstance(param_or_buffer_names_no_ema, (set, list))
+        self.param_or_buffer_names_no_ema = param_or_buffer_names_no_ema # parameter or buffer
 
         self.register_buffer('initted', torch.Tensor([False]))
         self.register_buffer('step', torch.tensor([0]))
@@ -107,12 +111,20 @@ class EMA(nn.Module):
     def update_moving_average(self, ma_model, current_model):
         current_decay = self.get_current_decay()
 
-        for current_params, ma_params in zip(list(current_model.parameters()), list(ma_model.parameters())):
+        for (name, current_params), (_, ma_params) in zip(list(current_model.named_parameters()), list(ma_model.named_parameters())):
+            if name in self.param_or_buffer_names_no_ema:
+                ma_param.data.copy_(current_param.data)
+                continue
+
             difference = ma_params.data - current_params.data
             difference.mul_(1.0 - current_decay)
             ma_params.sub_(difference)
 
-        for current_buffer, ma_buffer in zip(list(current_model.buffers()), list(ma_model.buffers())):
+        for (name, current_buffer), (_, ma_buffer) in zip(list(current_model.named_buffers()), list(ma_model.named_buffers())):
+            if name in self.param_or_buffer_names_no_ema:
+                ma_buffer.data.copy_(current_buffer.data)
+                continue
+
             difference = ma_buffer - current_buffer
             difference.mul_(1.0 - current_decay)
             ma_buffer.sub_(difference)
