@@ -113,7 +113,7 @@ class EMA(nn.Module):
 
         for (name, current_params), (_, ma_params) in zip(list(current_model.named_parameters()), list(ma_model.named_parameters())):
             if name in self.param_or_buffer_names_no_ema:
-                ma_param.data.copy_(current_param.data)
+                ma_params.data.copy_(current_params.data)
                 continue
 
             difference = ma_params.data - current_params.data
