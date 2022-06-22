@@ -5,6 +5,9 @@ from torch import nn
 def exists(val):
     return val is not None
 
+def is_float_dtype(dtype):
+    return any([dtype == float_dtype for float_dtype in (torch.float64, torch.float32, torch.float16, torch.bfloat16)])
+
 def clamp(value, min_value = None, max_value = None):
     assert exists(min_value) or exists(max_value)
     if exists(min_value):
@@ -75,11 +78,17 @@ class EMA(nn.Module):
         self.ema_model.to(device)
 
     def copy_params_from_model_to_ema(self):
-        for ma_param, current_param in zip(list(self.ema_model.parameters()), list(self.online_model.parameters())):
-            ma_param.data.copy_(current_param.data)
+        for ma_params, current_params in zip(list(self.ema_model.parameters()), list(self.online_model.parameters())):
+            if not is_float_dtype(current_params.dtype):
+                continue
 
-        for ma_buffer, current_buffer in zip(list(self.ema_model.buffers()), list(self.online_model.buffers())):
-            ma_buffer.data.copy_(current_buffer.data)
+            ma_params.data.copy_(current_params.data)
+
+        for ma_buffers, current_buffers in zip(list(self.ema_model.buffers()), list(self.online_model.buffers())):
+            if not is_float_dtype(current_buffers.dtype):
+                continue
+
+            ma_buffers.data.copy_(current_buffers.data)
 
     def get_current_decay(self):
         epoch = clamp(self.step.item() - self.update_after_step - 1, min_value = 0)
@@ -112,8 +121,11 @@ class EMA(nn.Module):
         current_decay = self.get_current_decay()
 
         for (name, current_params), (_, ma_params) in zip(list(current_model.named_parameters()), list(ma_model.named_parameters())):
+            if not is_float_dtype(current_params.dtype):
+                continue
+
             if name in self.param_or_buffer_names_no_ema:
-                ma_param.data.copy_(current_param.data)
+                ma_params.data.copy_(current_params.data)
                 continue
 
             difference = ma_params.data - current_params.data
@@ -121,6 +133,9 @@ class EMA(nn.Module):
             ma_params.sub_(difference)
 
         for (name, current_buffer), (_, ma_buffer) in zip(list(current_model.named_buffers()), list(ma_model.named_buffers())):
+            if not is_float_dtype(current_buffer.dtype):
+                continue
+
             if name in self.param_or_buffer_names_no_ema:
                 ma_buffer.data.copy_(current_buffer.data)
                 continue
