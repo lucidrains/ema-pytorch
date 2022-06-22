@@ -9,12 +9,12 @@ from ema_pytorch import EMA
 
 # your neural network as a pytorch module
 
-network = torch.nn.Linear(512, 512)
+net = torch.nn.Linear(512, 512)
 
 # wrap your neural network, specify the decay (beta)
 
 ema = EMA(
-    network,
+    net,
     beta = 0.9999,              # exponential moving average factor
     update_after_step = 100,    # only after this number of .update() calls will it start updating
     update_every = 10,          # how often to actually update, to save on compute (updates every 10th .update() call)
