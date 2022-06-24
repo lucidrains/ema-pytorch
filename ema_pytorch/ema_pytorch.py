@@ -91,7 +91,7 @@ class EMA(nn.Module):
             ma_buffers.data.copy_(current_buffers.data)
 
     def get_current_decay(self):
-        epoch = clamp(self.step.item() - self.update_after_step - 1, min_value = 0)
+        epoch = clamp(self.step.item() - self.update_after_step - 1, min_value = 0.)
         value = 1 - (1 + epoch / self.inv_gamma) ** - self.power
 
         if epoch <= 0:
