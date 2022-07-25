@@ -48,6 +48,7 @@ class EMA(nn.Module):
         power = 2 / 3,
         min_value = 0.0,
         param_or_buffer_names_no_ema = set(),
+        ignore_names = set(),
     ):
         super().__init__()
         self.beta = beta
@@ -69,6 +70,8 @@ class EMA(nn.Module):
 
         assert isinstance(param_or_buffer_names_no_ema, (set, list))
         self.param_or_buffer_names_no_ema = param_or_buffer_names_no_ema # parameter or buffer
+
+        self.ignore_names = ignore_names
 
         self.register_buffer('initted', torch.Tensor([False]))
         self.register_buffer('step', torch.tensor([0]))
@@ -121,6 +124,9 @@ class EMA(nn.Module):
         current_decay = self.get_current_decay()
 
         for (name, current_params), (_, ma_params) in zip(list(current_model.named_parameters()), list(ma_model.named_parameters())):
+            if name in self.ignore_names:
+                continue
+
             if not is_float_dtype(current_params.dtype):
                 continue
 
@@ -133,6 +139,9 @@ class EMA(nn.Module):
             ma_params.sub_(difference)
 
         for (name, current_buffer), (_, ma_buffer) in zip(list(current_model.named_buffers()), list(ma_model.named_buffers())):
+            if name in self.ignore_names:
+                continue
+
             if not is_float_dtype(current_buffer.dtype):
                 continue
 
