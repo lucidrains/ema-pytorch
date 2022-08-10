@@ -41,6 +41,7 @@ class EMA(nn.Module):
     def __init__(
         self,
         model,
+        ema_model = None,           # if your model has lazylinears or other types of non-deepcopyable modules, you can pass in your own ema model
         beta = 0.9999,
         update_after_step = 100,
         update_every = 10,
@@ -54,11 +55,14 @@ class EMA(nn.Module):
         self.beta = beta
         self.online_model = model
 
-        try:
-            self.ema_model = copy.deepcopy(model)
-        except:
-            print('Your model was not copyable. Please make sure you are not using any LazyLinear')
-            exit()
+        self.ema_model = ema_model
+
+        if not exists(self.ema_model):
+            try:
+                self.ema_model = copy.deepcopy(model)
+            except:
+                print('Your model was not copyable. Please make sure you are not using any LazyLinear')
+                exit()
 
         self.ema_model.requires_grad_(False)
         self.update_every = update_every
