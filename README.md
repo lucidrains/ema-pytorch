@@ -2,6 +2,13 @@
 
 A simple way to keep track of an Exponential Moving Average (EMA) version of your pytorch model
 
+## Install
+
+```bash
+$ pip install ema-pytorch
+```
+
+## Usage
 
 ```python
 import torch
