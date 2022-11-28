@@ -65,6 +65,10 @@ class EMA(nn.Module):
                 exit()
 
         self.ema_model.requires_grad_(False)
+
+        self.parameter_names = {name for name, param in self.ema_model.named_parameters() if is_float_dtype(param)}
+        self.buffer_names = {name for name, buffer in self.ema_model.named_buffers() if is_float_dtype(buffer)}
+
         self.update_every = update_every
         self.update_after_step = update_after_step
 
@@ -84,17 +88,23 @@ class EMA(nn.Module):
         device = self.initted.device
         self.ema_model.to(device)
 
-    def copy_params_from_model_to_ema(self):
-        for ma_params, current_params in zip(list(self.ema_model.parameters()), list(self.online_model.parameters())):
-            if not is_float_dtype(current_params.dtype):
+    def get_params_iter(self, model):
+        for name, param in model.named_parameters():
+            if name not in self.parameter_names:
                 continue
+            yield name, param
 
+    def get_buffers_iter(self, model):
+        for name, buffer in model.named_parameters():
+            if name not in self.buffer_names:
+                continue
+            yield name, buffer
+
+    def copy_params_from_model_to_ema(self):
+        for ma_params, current_params in zip(self.get_params_iter(self.ema_model), self.get_params_iter(self.online_model)):
             ma_params.data.copy_(current_params.data)
 
-        for ma_buffers, current_buffers in zip(list(self.ema_model.buffers()), list(self.online_model.buffers())):
-            if not is_float_dtype(current_buffers.dtype):
-                continue
-
+        for ma_buffers, current_buffers in zip(self.get_buffers_iter(self.ema_model), self.get_buffers_iter(self.online_model)):
             ma_buffers.data.copy_(current_buffers.data)
 
     def get_current_decay(self):
@@ -127,11 +137,8 @@ class EMA(nn.Module):
     def update_moving_average(self, ma_model, current_model):
         current_decay = self.get_current_decay()
 
-        for (name, current_params), (_, ma_params) in zip(list(current_model.named_parameters()), list(ma_model.named_parameters())):
+        for (name, current_params), (_, ma_params) in zip(self.get_params_iter(current_model), self.get_params_iter(ma_model)):
             if name in self.ignore_names:
-                continue
-
-            if not is_float_dtype(current_params.dtype):
                 continue
 
             if name in self.param_or_buffer_names_no_ema:
@@ -142,11 +149,8 @@ class EMA(nn.Module):
             difference.mul_(1.0 - current_decay)
             ma_params.sub_(difference)
 
-        for (name, current_buffer), (_, ma_buffer) in zip(list(current_model.named_buffers()), list(ma_model.named_buffers())):
+        for (name, current_buffer), (_, ma_buffer) in zip(self.get_buffers_iter(current_model), self.get_buffers_iter(ma_model)):
             if name in self.ignore_names:
-                continue
-
-            if not is_float_dtype(current_buffer.dtype):
                 continue
 
             if name in self.param_or_buffer_names_no_ema:
