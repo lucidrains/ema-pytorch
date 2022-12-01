@@ -5,9 +5,6 @@ from torch import nn
 def exists(val):
     return val is not None
 
-def is_float_dtype(dtype):
-    return any([dtype == float_dtype for float_dtype in (torch.float64, torch.float32, torch.float16, torch.bfloat16)])
-
 def clamp(value, min_value = None, max_value = None):
     assert exists(min_value) or exists(max_value)
     if exists(min_value):
@@ -66,8 +63,8 @@ class EMA(nn.Module):
 
         self.ema_model.requires_grad_(False)
 
-        self.parameter_names = {name for name, param in self.ema_model.named_parameters() if is_float_dtype(param.dtype)}
-        self.buffer_names = {name for name, buffer in self.ema_model.named_buffers() if is_float_dtype(buffer.dtype)}
+        self.parameter_names = {name for name, param in self.ema_model.named_parameters() if param.dtype == torch.float}
+        self.buffer_names = {name for name, buffer in self.ema_model.named_buffers() if buffer.dtype == torch.float}
 
         self.update_every = update_every
         self.update_after_step = update_after_step
