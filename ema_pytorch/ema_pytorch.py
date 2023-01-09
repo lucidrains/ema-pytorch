@@ -47,6 +47,7 @@ class EMA(nn.Module):
         min_value = 0.0,
         param_or_buffer_names_no_ema = set(),
         ignore_names = set(),
+        ignore_startswith_names = set()
     ):
         super().__init__()
         self.beta = beta
@@ -77,6 +78,7 @@ class EMA(nn.Module):
         self.param_or_buffer_names_no_ema = param_or_buffer_names_no_ema # parameter or buffer
 
         self.ignore_names = ignore_names
+        self.ignore_startswith_names = ignore_startswith_names
 
         self.register_buffer('initted', torch.Tensor([False]))
         self.register_buffer('step', torch.tensor([0]))
@@ -138,6 +140,9 @@ class EMA(nn.Module):
             if name in self.ignore_names:
                 continue
 
+            if any([name.startswith(prefix) for prefix in self.ignore_startswith_names]):
+                continue
+
             if name in self.param_or_buffer_names_no_ema:
                 ma_params.data.copy_(current_params.data)
                 continue
@@ -148,6 +153,9 @@ class EMA(nn.Module):
 
         for (name, current_buffer), (_, ma_buffer) in zip(self.get_buffers_iter(current_model), self.get_buffers_iter(ma_model)):
             if name in self.ignore_names:
+                continue
+
+            if any([name.startswith(prefix) for prefix in self.ignore_startswith_names]):
                 continue
 
             if name in self.param_or_buffer_names_no_ema:
