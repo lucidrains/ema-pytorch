@@ -47,11 +47,22 @@ class EMA(nn.Module):
         min_value = 0.0,
         param_or_buffer_names_no_ema = set(),
         ignore_names = set(),
-        ignore_startswith_names = set()
+        ignore_startswith_names = set(),
+        include_online_model = True  # set this to False if you do not wish for the online model to be saved along with the ema model (managed externally)
     ):
         super().__init__()
         self.beta = beta
-        self.online_model = model
+
+        # whether to include the online model within the module tree, so that state_dict also saves it
+
+        self.include_online_model = include_online_model
+
+        if include_online_model:
+            self.online_model = model
+        else:
+            self.online_model = [model] # hack
+
+        # ema model
 
         self.ema_model = ema_model
 
@@ -83,6 +94,10 @@ class EMA(nn.Module):
         self.register_buffer('initted', torch.Tensor([False]))
         self.register_buffer('step', torch.tensor([0]))
 
+    @property
+    def model(self):
+        return self.online_model if self.include_online_model else self.online_model[0]
+    
     def restore_ema_model_device(self):
         device = self.initted.device
         self.ema_model.to(device)
@@ -100,10 +115,10 @@ class EMA(nn.Module):
             yield name, buffer
 
     def copy_params_from_model_to_ema(self):
-        for (_, ma_params), (_, current_params) in zip(self.get_params_iter(self.ema_model), self.get_params_iter(self.online_model)):
+        for (_, ma_params), (_, current_params) in zip(self.get_params_iter(self.ema_model), self.get_params_iter(self.model)):
             ma_params.data.copy_(current_params.data)
 
-        for (_, ma_buffers), (_, current_buffers) in zip(self.get_buffers_iter(self.ema_model), self.get_buffers_iter(self.online_model)):
+        for (_, ma_buffers), (_, current_buffers) in zip(self.get_buffers_iter(self.ema_model), self.get_buffers_iter(self.model)):
             ma_buffers.data.copy_(current_buffers.data)
 
     def get_current_decay(self):
@@ -130,7 +145,7 @@ class EMA(nn.Module):
             self.copy_params_from_model_to_ema()
             self.initted.data.copy_(torch.Tensor([True]))
 
-        self.update_moving_average(self.ema_model, self.online_model)
+        self.update_moving_average(self.ema_model, self.model)
 
     @torch.no_grad()
     def update_moving_average(self, ma_model, current_model):
