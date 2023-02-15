@@ -162,9 +162,7 @@ class EMA(nn.Module):
                 ma_params.data.copy_(current_params.data)
                 continue
 
-            difference = ma_params.data - current_params.data
-            difference.mul_(1.0 - current_decay)
-            ma_params.sub_(difference)
+            ma_params.data.lerp_(current_params.data, 1. - current_decay)
 
         for (name, current_buffer), (_, ma_buffer) in zip(self.get_buffers_iter(current_model), self.get_buffers_iter(ma_model)):
             if name in self.ignore_names:
@@ -177,9 +175,7 @@ class EMA(nn.Module):
                 ma_buffer.data.copy_(current_buffer.data)
                 continue
 
-            difference = ma_buffer - current_buffer
-            difference.mul_(1.0 - current_decay)
-            ma_buffer.sub_(difference)
+            ma_buffer.data.lerp_(current_buffer.data, 1. - current_decay)
 
     def __call__(self, *args, **kwargs):
         return self.ema_model(*args, **kwargs)
