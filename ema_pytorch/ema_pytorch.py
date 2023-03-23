@@ -109,7 +109,7 @@ class EMA(nn.Module):
             yield name, param
 
     def get_buffers_iter(self, model):
-        for name, buffer in model.named_parameters():
+        for name, buffer in model.named_buffers():
             if name not in self.buffer_names:
                 continue
             yield name, buffer
