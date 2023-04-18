@@ -75,8 +75,8 @@ class EMA(nn.Module):
 
         self.ema_model.requires_grad_(False)
 
-        self.parameter_names = {name for name, param in self.ema_model.named_parameters() if param.dtype == torch.float}
-        self.buffer_names = {name for name, buffer in self.ema_model.named_buffers() if buffer.dtype == torch.float}
+        self.parameter_names = {name for name, param in self.ema_model.named_parameters() if param.dtype in [torch.float, torch.float16]}
+        self.buffer_names = {name for name, buffer in self.ema_model.named_buffers() if buffer.dtype in [torch.float, torch.float16]}
 
         self.update_every = update_every
         self.update_after_step = update_after_step
