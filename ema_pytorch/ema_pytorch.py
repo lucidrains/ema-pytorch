@@ -1,6 +1,7 @@
 import copy
 import torch
 from torch import nn
+from torch.nn import Module
 
 def exists(val):
     return val is not None
@@ -15,7 +16,7 @@ def clamp(value, min_value = None, max_value = None):
 
     return value
 
-class EMA(nn.Module):
+class EMA(Module):
     """
     Implements exponential moving average shadowing for your model.
 
@@ -97,6 +98,9 @@ class EMA(nn.Module):
     @property
     def model(self):
         return self.online_model if self.include_online_model else self.online_model[0]
+
+    def eval(self):
+        return self.ema_model.eval()
     
     def restore_ema_model_device(self):
         device = self.initted.device
