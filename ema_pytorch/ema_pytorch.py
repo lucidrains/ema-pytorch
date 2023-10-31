@@ -125,6 +125,13 @@ class EMA(Module):
         for (_, ma_buffers), (_, current_buffers) in zip(self.get_buffers_iter(self.ema_model), self.get_buffers_iter(self.model)):
             ma_buffers.data.copy_(current_buffers.data)
 
+    def copy_params_from_ema_to_model(self):
+        for (_, ma_params), (_, current_params) in zip(self.get_params_iter(self.ema_model), self.get_params_iter(self.model)):
+            current_params.data.copy_(ma_params.data)
+
+        for (_, ma_buffers), (_, current_buffers) in zip(self.get_buffers_iter(self.ema_model), self.get_buffers_iter(self.model)):
+            current_buffers.data.copy_(ma_buffers.data)
+
     def get_current_decay(self):
         epoch = clamp(self.step.item() - self.update_after_step - 1, min_value = 0.)
         value = 1 - (1 + epoch / self.inv_gamma) ** - self.power
