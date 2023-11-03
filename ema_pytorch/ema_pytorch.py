@@ -1,20 +1,14 @@
 import copy
+
 import torch
 from torch import nn
 from torch.nn import Module
 
+from beartype import beartype
+from beartype.typing import Set, Optional
+
 def exists(val):
     return val is not None
-
-def clamp(value, min_value = None, max_value = None):
-    assert exists(min_value) or exists(max_value)
-    if exists(min_value):
-        value = max(value, min_value)
-
-    if exists(max_value):
-        value = min(value, max_value)
-
-    return value
 
 class EMA(Module):
     """
@@ -36,19 +30,21 @@ class EMA(Module):
         power (float): Exponential factor of EMA warmup. Default: 1.
         min_value (float): The minimum EMA decay rate. Default: 0.
     """
+
+    @beartype
     def __init__(
         self,
-        model,
-        ema_model = None,           # if your model has lazylinears or other types of non-deepcopyable modules, you can pass in your own ema model
+        model: Module,
+        ema_model: Optional[Module] = None,           # if your model has lazylinears or other types of non-deepcopyable modules, you can pass in your own ema model
         beta = 0.9999,
         update_after_step = 100,
         update_every = 10,
         inv_gamma = 1.0,
         power = 2 / 3,
         min_value = 0.0,
-        param_or_buffer_names_no_ema = set(),
-        ignore_names = set(),
-        ignore_startswith_names = set(),
+        param_or_buffer_names_no_ema: Set[str] = set(),
+        ignore_names: Set[str] = set(),
+        ignore_startswith_names: Set[str] = set(),
         include_online_model = True  # set this to False if you do not wish for the online model to be saved along with the ema model (managed externally)
     ):
         super().__init__()
@@ -92,8 +88,8 @@ class EMA(Module):
         self.ignore_names = ignore_names
         self.ignore_startswith_names = ignore_startswith_names
 
-        self.register_buffer('initted', torch.Tensor([False]))
-        self.register_buffer('step', torch.tensor([0]))
+        self.register_buffer('initted', torch.tensor(False))
+        self.register_buffer('step', torch.tensor(0))
 
     @property
     def model(self):
@@ -133,13 +129,13 @@ class EMA(Module):
             current_buffers.data.copy_(ma_buffers.data)
 
     def get_current_decay(self):
-        epoch = clamp(self.step.item() - self.update_after_step - 1, min_value = 0.)
+        epoch = (self.step - self.update_after_step - 1).clamp(min = 0.)
         value = 1 - (1 + epoch / self.inv_gamma) ** - self.power
 
-        if epoch <= 0:
+        if epoch.item() <= 0:
             return 0.
 
-        return clamp(value, min_value = self.min_value, max_value = self.beta)
+        return value.clamp(min = self.min_value, max = self.beta).item()
 
     def update(self):
         step = self.step.item()
@@ -154,7 +150,7 @@ class EMA(Module):
 
         if not self.initted.item():
             self.copy_params_from_model_to_ema()
-            self.initted.data.copy_(torch.Tensor([True]))
+            self.initted.data.copy_(torch.tensor(True))
 
         self.update_moving_average(self.ema_model, self.model)
 
