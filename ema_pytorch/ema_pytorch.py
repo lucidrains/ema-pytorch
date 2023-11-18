@@ -83,7 +83,8 @@ class EMA(Module):
         if not exists(self.ema_model):
             try:
                 self.ema_model = deepcopy(model)
-            except:
+            except Exception as e:
+                print(f'Error: While trying to deepcopy model: {e}')
                 print('Your model was not copyable. Please make sure you are not using any LazyLinear')
                 exit()
 
