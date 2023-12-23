@@ -43,7 +43,7 @@ class EMA(Module):
 
     Args:
         inv_gamma (float): Inverse multiplicative factor of EMA warmup. Default: 1.
-        power (float): Exponential factor of EMA warmup. Default: 1.
+        power (float): Exponential factor of EMA warmup. Default: 2/3.
         min_value (float): The minimum EMA decay rate. Default: 0.
     """
 
