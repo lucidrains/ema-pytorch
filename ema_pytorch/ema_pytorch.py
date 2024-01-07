@@ -53,6 +53,7 @@ class EMA(Module):
         model: Module,
         ema_model: Optional[Module] = None,           # if your model has lazylinears or other types of non-deepcopyable modules, you can pass in your own ema model
         beta = 0.9999,
+        karras_beta = False,                          # if True, uses the karras time dependent beta
         update_after_step = 100,
         update_every = 10,
         inv_gamma = 1.0,
@@ -65,7 +66,9 @@ class EMA(Module):
         allow_different_devices = False               # if the EMA model is on a different device (say CPU), automatically move the tensor
     ):
         super().__init__()
-        self.beta = beta
+        self._beta = beta
+        if karras_beta:
+            print("Using Karras beta, ignoring beta argument")
 
         # whether to include the online model within the module tree, so that state_dict also saves it
 
@@ -127,6 +130,13 @@ class EMA(Module):
     @property
     def model(self):
         return self.online_model if self.include_online_model else self.online_model[0]
+    
+    @property
+    def beta(self):
+        if self.karras_beta:
+            return (1 - 1 / (self.step + 1)) ** (1 + self.power)
+
+        return self._beta
 
     def eval(self):
         return self.ema_model.eval()
