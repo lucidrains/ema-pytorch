@@ -67,6 +67,7 @@ class EMA(Module):
     ):
         super().__init__()
         self._beta = beta
+        self.karras_beta = karras_beta
         if karras_beta:
             print("Using Karras beta, ignoring beta argument")
 
