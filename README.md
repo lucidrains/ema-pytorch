@@ -52,3 +52,16 @@ ema_output = ema(data)
 ## Todo
 
 - [ ] address the issue of annealing EMA to 1 near the end of training for BYOL https://github.com/lucidrains/byol-pytorch/issues/82
+
+## Citations
+
+```bibtex
+@article{Karras2023AnalyzingAI,
+    title   = {Analyzing and Improving the Training Dynamics of Diffusion Models},
+    author  = {Tero Karras and Miika Aittala and Jaakko Lehtinen and Janne Hellsten and Timo Aila and Samuli Laine},
+    journal = {ArXiv},
+    year    = {2023},
+    volume  = {abs/2312.02696},
+    url     = {https://api.semanticscholar.org/CorpusID:265659032}
+}
+```
