@@ -69,6 +69,8 @@ class EMA(Module):
         self._beta = beta
         self.karras_beta = karras_beta
 
+        self.is_frozen = beta == 1.
+
         # whether to include the online model within the module tree, so that state_dict also saves it
 
         self.include_online_model = include_online_model
@@ -202,6 +204,9 @@ class EMA(Module):
 
     @torch.no_grad()
     def update_moving_average(self, ma_model, current_model):
+        if self.is_frozen:
+            return
+
         copy, lerp = self.inplace_copy, self.inplace_lerp
         current_decay = self.get_current_decay()
 
