@@ -14,17 +14,17 @@ def exists(val):
 def get_module_device(m: Module):
     return next(m.parameters()).device
 
-def inplace_copy(src: Tensor, tgt: Tensor, *, auto_move_device = False):
+def inplace_copy(tgt: Tensor, src: Tensor, *, auto_move_device = False):
     if auto_move_device:
-        tgt = tgt.to(src.device)
+        src = src.to(tgt.device)
 
-    src.copy_(tgt)
+    tgt.copy_(src)
 
-def inplace_lerp(src: Tensor, tgt: Tensor, weight, *, auto_move_device = False):
+def inplace_lerp(tgt: Tensor, src: Tensor, weight, *, auto_move_device = False):
     if auto_move_device:
-        tgt = tgt.to(src.device)
+        src = src.to(tgt.device)
 
-    src.lerp_(tgt, weight)
+    tgt.lerp_(src, weight)
 
 class EMA(Module):
     """
