@@ -61,7 +61,7 @@ net = torch.nn.Linear(512, 512)
 
 # wrap your neural network, specify the decay (beta)
 
-ema = PostHocEMA(
+emas = PostHocEMA(
     net,
     sigma_rels = (0.05, 0.3),   # a tuple with the hyperparameter for the multiple EMAs. you need at least 2 here to synthesize a new one
     update_every = 10,          # how often to actually update, to save on compute (updates every 10th .update() call)
@@ -79,18 +79,18 @@ for _ in range(1000):
 
     # you will call the update function on your moving average wrapper
 
-    ema.update()
+    emas.update()
 
 # now that you have a few checkpoints
 # you can synthesize an EMA model with a different sigma_rel (say 0.15)
 
-synthesized_ema_model = ema.synthesize_ema_model(sigma_rel = 0.15)
+synthesized_ema = emas.synthesize_ema_model(sigma_rel = 0.15)
 
 # output with synthesized EMA
 
 data = torch.randn(1, 512)
 
-synthesized_ema_output = synthesized_ema_model(data)
+synthesized_ema_output = synthesized_ema(data)
 
 ```
 
