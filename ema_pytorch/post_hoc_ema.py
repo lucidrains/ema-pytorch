@@ -1,3 +1,4 @@
+from pathlib import Path
 from copy import deepcopy
 from functools import partial
 
@@ -12,6 +13,9 @@ from beartype.typing import Set, Tuple, Optional
 
 def exists(val):
     return val is not None
+
+def first(arr):
+    return arr[0]
 
 def get_module_device(m: Module):
     return next(m.parameters()).device
@@ -222,6 +226,8 @@ class PostHocEMA(Module):
         model: Module,
         sigma_rels: Optional[Tuple[float, ...]] = None,
         gammas: Optional[Tuple[float, ...]] = None,
+        checkpoint_every_num_steps: int = 1000,
+        checkpoint_folder: str = './post-hoc-ema-checkpoints',
         **kwargs
     ):
         super().__init__()
@@ -230,12 +236,23 @@ class PostHocEMA(Module):
         if exists(sigma_rels):
             gammas = tuple(map(sigma_rel_to_gamma, sigma_rels))
 
+        assert len(gammas) > 1, 'at least 2 ema models with different gammas in order to synthesize new ema models of a different gamma'
         assert len(set(gammas)) == len(gammas), 'calculated gammas must be all unique'
 
         self.gammas = gammas
         self.num_ema_models = len(gammas)
 
         self.ema_models = ModuleList([KarrasEMA(model, gamma = gamma, **kwargs) for gamma in gammas])
+
+        self.checkpoint_folder = Path(checkpoint_folder)
+        self.checkpoint_folder.mkdir(exist_ok = True, parents = True)
+        assert self.checkpoint_folder.is_dir()
+
+        self.checkpoint_every_num_steps = checkpoint_every_num_steps
+
+    @property
+    def step(self):
+        return first(self.ema_models).step
 
     def copy_params_from_ema_to_model(self):
         for ema_model in self.ema_models:
@@ -244,6 +261,17 @@ class PostHocEMA(Module):
     def update(self):
         for ema_model in self.ema_models:
             ema_model.update()
+
+    def checkpoint(self):
+        raise NotImplementedError
+
+    def synthesize_ema_model(
+        self,
+        gamma: Optional[float] = None,
+        sigma_rel: Optional[float] = None
+    ) -> KarrasEMA:
+
+        raise NotImplementedError
 
     def __call__(self, *args, **kwargs):
         return tuple(ema_model(*args, **kwargs) for ema_model in self.ema_models)
