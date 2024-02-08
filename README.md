@@ -53,11 +53,7 @@ In order to use the post-hoc synthesized EMA, proposed by Karras et al. in <a hr
 
 ```python
 import torch
-
-from ema_pytorch import (
-    EMA,
-    PostHocEMA
-)
+from ema_pytorch import PostHocEMA
 
 # your neural network as a pytorch module
 
