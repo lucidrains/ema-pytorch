@@ -59,12 +59,12 @@ from ema_pytorch import PostHocEMA
 
 net = torch.nn.Linear(512, 512)
 
-# wrap your neural network, specify the decay (beta)
+# wrap your neural network, specify the sigma_rels or gammas
 
 emas = PostHocEMA(
     net,
-    sigma_rels = (0.05, 0.3),   # a tuple with the hyperparameter for the multiple EMAs. you need at least 2 here to synthesize a new one
-    update_every = 10,          # how often to actually update, to save on compute (updates every 10th .update() call)
+    sigma_rels = (0.05, 0.3),           # a tuple with the hyperparameter for the multiple EMAs. you need at least 2 here to synthesize a new one
+    update_every = 10,                  # how often to actually update, to save on compute (updates every 10th .update() call)
     checkpoint_every_num_steps = 10,
     checkpoint_folder = './post-hoc-ema-checkpoints'  # the folder of saved checkpoints for each sigma_rel (gamma) across timesteps with the hparam above, used to synthesizing a new EMA model after training
 )
