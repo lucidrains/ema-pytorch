@@ -3,10 +3,12 @@ from functools import partial
 
 import torch
 from torch import nn, Tensor
-from torch.nn import Module
+from torch.nn import Module, ModuleList
+
+import numpy as np
 
 from beartype import beartype
-from beartype.typing import Set, Optional
+from beartype.typing import Set, Tuple, Optional
 
 def exists(val):
     return val is not None
@@ -30,7 +32,7 @@ def inplace_lerp(tgt: Tensor, src: Tensor, weight, *, auto_move_device = False):
 
 def sigma_rel_to_gamma(sigma_rel):
     t = sigma_rel ** -2
-    return Tensor([1, 7, 16 - t, 12 - t]).numpy().real.max()
+    return np.roots([1, 7, 16 - t, 12 - t]).real.max().item()
 
 class KarrasEMA(Module):
     """
@@ -209,3 +211,39 @@ class KarrasEMA(Module):
 
     def __call__(self, *args, **kwargs):
         return self.ema_model(*args, **kwargs)
+
+# post hoc ema wrapper
+
+class PostHocEMA(Module):
+
+    @beartype
+    def __init__(
+        self,
+        model: Module,
+        sigma_rels: Optional[Tuple[float, ...]] = None,
+        gammas: Optional[Tuple[float, ...]] = None,
+        **kwargs
+    ):
+        super().__init__()
+        assert exists(sigma_rels) ^ exists(gammas)
+
+        if exists(sigma_rels):
+            gammas = tuple(map(sigma_rel_to_gamma, sigma_rels))
+
+        assert len(set(gammas)) == len(gammas), 'calculated gammas must be all unique'
+
+        self.gammas = gammas
+        self.num_ema_models = len(gammas)
+
+        self.ema_models = ModuleList([KarrasEMA(model, gamma = gamma, **kwargs) for gamma in gammas])
+
+    def copy_params_from_ema_to_model(self):
+        for ema_model in self.ema_models:
+            ema_model.copy_params_from_model_to_ema()
+
+    def update(self):
+        for ema_model in self.ema_models:
+            ema_model.update()
+
+    def __call__(self, *args, **kwargs):
+        return tuple(ema_model(*args, **kwargs) for ema_model in self.ema_models)
