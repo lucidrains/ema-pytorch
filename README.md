@@ -49,9 +49,50 @@ ema_output = ema(data)
 # however, if you wish to access the copy of your model with EMA, then it will live at ema.ema_model
 ```
 
-## Todo
+In order to use the post-hoc synthesized EMA, proposed by Karras et al. in <a href="https://arxiv.org/abs/2312.02696">a recent paper</a>, follow the example below
 
-- [ ] address the issue of annealing EMA to 1 near the end of training for BYOL https://github.com/lucidrains/byol-pytorch/issues/82
+```python
+import torch
+from ema_pytorch import PostHocEMA
+
+# your neural network as a pytorch module
+
+net = torch.nn.Linear(512, 512)
+
+# wrap your neural network, specify the decay (beta)
+
+ema = PostHocEMA(
+    net,
+    sigma_rels = (0.05, 0.3),   # a tuple with the hyperparameter for the multiple EMAs. you need at least 2 here to synthesize a new one
+    update_every = 10,          # how often to actually update, to save on compute (updates every 10th .update() call)
+    checkpoint_every_num_steps = 10
+)
+
+net.train()
+
+for _ in range(1000):
+    # mutate your network, with SGD or otherwise
+
+    with torch.no_grad():
+        net.weight.copy_(torch.randn_like(net.weight))
+        net.bias.copy_(torch.randn_like(net.bias))
+
+    # you will call the update function on your moving average wrapper
+
+    ema.update()
+
+# now that you have a few checkpoints
+# you can synthesize an EMA model with a different sigma_rel (say 0.15)
+
+synthesized_ema_model = ema.synthesize_ema_model(sigma_rel = 0.15)
+
+# output with synthesized EMA
+
+data = torch.randn(1, 512)
+
+synthesized_ema_output = synthesized_ema_model(data)
+
+```
 
 ## Citations
 

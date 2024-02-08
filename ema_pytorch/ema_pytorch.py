@@ -66,8 +66,7 @@ class EMA(Module):
         allow_different_devices = False               # if the EMA model is on a different device (say CPU), automatically move the tensor
     ):
         super().__init__()
-        self._beta = beta
-        self.karras_beta = karras_beta
+        self.beta = beta
 
         self.is_frozen = beta == 1.
 
@@ -131,13 +130,6 @@ class EMA(Module):
     @property
     def model(self):
         return self.online_model if self.include_online_model else self.online_model[0]
-    
-    @property
-    def beta(self):
-        if self.karras_beta:
-            return (1 - 1 / (self.step + 1)) ** (1 + self.power)
-
-        return self._beta
 
     def eval(self):
         return self.ema_model.eval()
