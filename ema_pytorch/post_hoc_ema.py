@@ -218,6 +218,24 @@ class KarrasEMA(Module):
 
 # post hoc ema wrapper
 
+# solving of the weights for combining all checkpoints into a newly synthesized EMA at desired gamma
+# Algorithm 3 copied from paper, redone in torch
+
+def p_dot_p(t_a, gamma_a, t_b, gamma_b):
+    t_ratio = t_a / t_b
+    t_exp = torch.where(t_a < t_b , gamma_b , -gamma_a)
+    t_max = torch.maximum(t_a , t_b)
+    num = (gamma_a + 1) * (gamma_b + 1) * t_ratio ** t_exp
+    den = (gamma_a + gamma_b + 1) * t_max
+    return num / den
+
+def solve_weights(t_i, gamma_i, t_r, gamma_r):
+    rv = lambda x: x.double().reshape(-1, 1)
+    cv = lambda x: x.double().reshape(1, -1)
+    A = p_dot_p(rv(t_i), rv(gamma_i), cv(t_i), cv(gamma_i))
+    b = p_dot_p(rv(t_i), rv(gamma_i), cv(t_r), cv(gamma_r))
+    return torch.linalg.solve(A, b)
+
 class PostHocEMA(Module):
 
     @beartype
@@ -242,6 +260,7 @@ class PostHocEMA(Module):
         self.gammas = gammas
         self.num_ema_models = len(gammas)
 
+        self._model = [model]
         self.ema_models = ModuleList([KarrasEMA(model, gamma = gamma, **kwargs) for gamma in gammas])
 
         self.checkpoint_folder = Path(checkpoint_folder)
@@ -249,6 +268,10 @@ class PostHocEMA(Module):
         assert self.checkpoint_folder.is_dir()
 
         self.checkpoint_every_num_steps = checkpoint_every_num_steps
+
+    @property
+    def model(self):
+        return first(self._model)
 
     @property
     def step(self):
@@ -262,16 +285,30 @@ class PostHocEMA(Module):
         for ema_model in self.ema_models:
             ema_model.update()
 
+        if not (self.step.item() % self.checkpoint_every_num_steps):
+            self.checkpoint()
+
     def checkpoint(self):
         raise NotImplementedError
 
+    @beartype
     def synthesize_ema_model(
         self,
         gamma: Optional[float] = None,
         sigma_rel: Optional[float] = None
     ) -> KarrasEMA:
 
-        raise NotImplementedError
+        assert exists(gamma) ^ exists(sigma_rel)
+
+        if exists(sigma_rel):
+            gamma = sigma_rel_to_gamma(sigma_rel)
+
+        synthesized_ema_model = KarrasEMA(
+            model = self.model,
+            gamma = gamma
+        )
+
+        return synthesized_ema_model
 
     def __call__(self, *args, **kwargs):
         return tuple(ema_model(*args, **kwargs) for ema_model in self.ema_models)
