@@ -53,7 +53,6 @@ class EMA(Module):
         model: Module,
         ema_model: Optional[Module] = None,           # if your model has lazylinears or other types of non-deepcopyable modules, you can pass in your own ema model
         beta = 0.9999,
-        karras_beta = False,                          # if True, uses the karras time dependent beta
         update_after_step = 100,
         update_every = 10,
         inv_gamma = 1.0,
