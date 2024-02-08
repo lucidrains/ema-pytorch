@@ -26,39 +26,27 @@ def inplace_lerp(tgt: Tensor, src: Tensor, weight, *, auto_move_device = False):
 
     tgt.lerp_(src, weight)
 
-class EMA(Module):
+# algorithm 2 in https://arxiv.org/abs/2312.02696
+
+def sigma_rel_to_gamma(sigma_rel):
+    t = sigma_rel ** -2
+    return Tensor([1, 7, 16 - t, 12 - t]).numpy().real.max()
+
+class KarrasEMA(Module):
     """
-    Implements exponential moving average shadowing for your model.
-
-    Utilizes an inverse decay schedule to manage longer term training runs.
-    By adjusting the power, you can control how fast EMA will ramp up to your specified beta.
-
-    @crowsonkb's notes on EMA Warmup:
-
-    If gamma=1 and power=1, implements a simple average. gamma=1, power=2/3 are
-    good values for models you plan to train for a million or more steps (reaches decay
-    factor 0.999 at 31.6K steps, 0.9999 at 1M steps), gamma=1, power=3/4 for models
-    you plan to train for less (reaches decay factor 0.999 at 10K steps, 0.9999 at
-    215.4k steps).
-
-    Args:
-        inv_gamma (float): Inverse multiplicative factor of EMA warmup. Default: 1.
-        power (float): Exponential factor of EMA warmup. Default: 2/3.
-        min_value (float): The minimum EMA decay rate. Default: 0.
+    exponential moving average module that uses hyperparameters from the paper https://arxiv.org/abs/2312.02696
+    can either use gamma or sigma_rel from paper
     """
 
     @beartype
     def __init__(
         self,
         model: Module,
+        sigma_rel: Optional[float] = None,
+        gamma: Optional[float] = None,
         ema_model: Optional[Module] = None,           # if your model has lazylinears or other types of non-deepcopyable modules, you can pass in your own ema model
-        beta = 0.9999,
-        karras_beta = False,                          # if True, uses the karras time dependent beta
-        update_after_step = 100,
-        update_every = 10,
-        inv_gamma = 1.0,
-        power = 2 / 3,
-        min_value = 0.0,
+        update_every: int = 100,
+        frozen: bool = False,
         param_or_buffer_names_no_ema: Set[str] = set(),
         ignore_names: Set[str] = set(),
         ignore_startswith_names: Set[str] = set(),
@@ -66,9 +54,14 @@ class EMA(Module):
         allow_different_devices = False               # if the EMA model is on a different device (say CPU), automatically move the tensor
     ):
         super().__init__()
-        self.beta = beta
 
-        self.is_frozen = beta == 1.
+        assert exists(sigma_rel) ^ exists(gamma), 'either sigma_rel or gamma is given. gamma is derived from sigma_rel as in the paper, then beta is dervied from gamma'
+
+        if exists(sigma_rel):
+            gamma = sigma_rel_to_gamma(sigma_rel)
+
+        self.gamma = gamma
+        self.frozen = frozen
 
         # whether to include the online model within the module tree, so that state_dict also saves it
 
@@ -106,11 +99,6 @@ class EMA(Module):
         # updating hyperparameters
 
         self.update_every = update_every
-        self.update_after_step = update_after_step
-
-        self.inv_gamma = inv_gamma
-        self.power = power
-        self.min_value = min_value
 
         assert isinstance(param_or_buffer_names_no_ema, (set, list))
         self.param_or_buffer_names_no_ema = param_or_buffer_names_no_ema # parameter or buffer
@@ -130,6 +118,10 @@ class EMA(Module):
     @property
     def model(self):
         return self.online_model if self.include_online_model else self.online_model[0]
+    
+    @property
+    def beta(self):
+        return (1 - 1 / (self.step + 1)) ** (1 + self.gamma)
 
     def eval(self):
         return self.ema_model.eval()
@@ -168,24 +160,11 @@ class EMA(Module):
         for (_, ma_buffers), (_, current_buffers) in zip(self.get_buffers_iter(self.ema_model), self.get_buffers_iter(self.model)):
             copy(current_buffers.data, ma_buffers.data)
 
-    def get_current_decay(self):
-        epoch = (self.step - self.update_after_step - 1).clamp(min = 0.)
-        value = 1 - (1 + epoch / self.inv_gamma) ** - self.power
-
-        if epoch.item() <= 0:
-            return 0.
-
-        return value.clamp(min = self.min_value, max = self.beta).item()
-
     def update(self):
         step = self.step.item()
         self.step += 1
 
         if (step % self.update_every) != 0:
-            return
-
-        if step <= self.update_after_step:
-            self.copy_params_from_model_to_ema()
             return
 
         if not self.initted.item():
@@ -196,11 +175,11 @@ class EMA(Module):
 
     @torch.no_grad()
     def update_moving_average(self, ma_model, current_model):
-        if self.is_frozen:
+        if self.frozen:
             return
 
         copy, lerp = self.inplace_copy, self.inplace_lerp
-        current_decay = self.get_current_decay()
+        current_decay = self.beta
 
         for (name, current_params), (_, ma_params) in zip(self.get_params_iter(current_model), self.get_params_iter(ma_model)):
             if name in self.ignore_names:
