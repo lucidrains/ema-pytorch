@@ -14,6 +14,9 @@ from beartype.typing import Set, Tuple, Optional
 def exists(val):
     return val is not None
 
+def default(val, d):
+    return val if exists(val) else d
+
 def first(arr):
     return arr[0]
 
@@ -56,7 +59,6 @@ class KarrasEMA(Module):
         param_or_buffer_names_no_ema: Set[str] = set(),
         ignore_names: Set[str] = set(),
         ignore_startswith_names: Set[str] = set(),
-        include_online_model = True,                  # set this to False if you do not wish for the online model to be saved along with the ema model (managed externally)
         allow_different_devices = False               # if the EMA model is on a different device (say CPU), automatically move the tensor
     ):
         super().__init__()
@@ -69,14 +71,7 @@ class KarrasEMA(Module):
         self.gamma = gamma
         self.frozen = frozen
 
-        # whether to include the online model within the module tree, so that state_dict also saves it
-
-        self.include_online_model = include_online_model
-
-        if include_online_model:
-            self.online_model = model
-        else:
-            self.online_model = [model] # hack
+        self.online_model = [model]
 
         # ema model
 
@@ -123,7 +118,7 @@ class KarrasEMA(Module):
 
     @property
     def model(self):
-        return self.online_model if self.include_online_model else self.online_model[0]
+        return first(self.online_model)
     
     @property
     def beta(self):
@@ -178,6 +173,31 @@ class KarrasEMA(Module):
             self.initted.data.copy_(torch.tensor(True))
 
         self.update_moving_average(self.ema_model, self.model)
+
+    def iter_all_ema_params_and_buffers(self):
+        for name, ma_params in self.get_params_iter(self.ema_model):
+            if name in self.ignore_names:
+                continue
+
+            if any([name.startswith(prefix) for prefix in self.ignore_startswith_names]):
+                continue
+
+            if name in self.param_or_buffer_names_no_ema:
+                continue
+
+            yield ma_params
+
+        for name, ma_buffer in self.get_buffers_iter(self.ema_model):
+            if name in self.ignore_names:
+                continue
+
+            if any([name.startswith(prefix) for prefix in self.ignore_startswith_names]):
+                continue
+
+            if name in self.param_or_buffer_names_no_ema:
+                continue
+
+            yield ma_buffer
 
     @torch.no_grad()
     def update_moving_average(self, ma_model, current_model):
@@ -268,6 +288,7 @@ class PostHocEMA(Module):
         assert self.checkpoint_folder.is_dir()
 
         self.checkpoint_every_num_steps = checkpoint_every_num_steps
+        self.ema_kwargs = kwargs
 
     @property
     def model(self):
@@ -276,6 +297,10 @@ class PostHocEMA(Module):
     @property
     def step(self):
         return first(self.ema_models).step
+
+    @property
+    def device(self):
+        return self.step.device
 
     def copy_params_from_ema_to_model(self):
         for ema_model in self.ema_models:
@@ -289,24 +314,90 @@ class PostHocEMA(Module):
             self.checkpoint()
 
     def checkpoint(self):
-        raise NotImplementedError
+        step = self.step.item()
+
+        for ind, ema_model in enumerate(self.ema_models):
+            filename = f'{ind}.{step}.pt'
+            path = self.checkpoint_folder / filename
+
+            pkg = ema_model.state_dict()
+            torch.save(pkg, str(path))
 
     @beartype
     def synthesize_ema_model(
         self,
         gamma: Optional[float] = None,
-        sigma_rel: Optional[float] = None
+        sigma_rel: Optional[float] = None,
+        step: Optional[int] = None,
     ) -> KarrasEMA:
-
         assert exists(gamma) ^ exists(sigma_rel)
+        device = self.device
 
         if exists(sigma_rel):
             gamma = sigma_rel_to_gamma(sigma_rel)
 
         synthesized_ema_model = KarrasEMA(
             model = self.model,
-            gamma = gamma
+            gamma = gamma,
+            **self.ema_kwargs
         )
+
+        synthesized_ema_model
+
+        # get all checkpoints
+
+        gammas = []
+        timesteps = []
+        checkpoints = [*self.checkpoint_folder.glob('*.pt')]
+
+        for file in checkpoints:
+            gamma_ind, timestep = map(int, file.stem.split('.'))
+            gamma = self.gammas[gamma_ind]
+
+            gammas.append(gamma)
+            timesteps.append(timestep)
+
+        step = default(step, max(timesteps))
+        assert step <= max(timesteps), f'you can only synthesize for a timestep that is less than the max timestep {max(timesteps)}'
+
+        # line up with Algorithm 3
+
+        gamma_i = Tensor(gammas, device = device)
+        t_i = Tensor(timesteps, device = device)
+
+        gamma_r = Tensor([gamma], device = device)
+        t_r = Tensor([step], device = device)
+
+        # solve for weights for combining all checkpoints into synthesized, using least squares as in paper
+
+        weights = solve_weights(t_i, gamma_i, t_r, gamma_r)
+        weights = weights.squeeze(-1)
+
+        # now sum up all the checkpoints using the weights one by one
+
+        tmp_ema_model = KarrasEMA(
+            model = self.model,
+            gamma = gamma,
+            **self.ema_kwargs
+        )
+
+        for ind, (checkpoint, weight) in enumerate(zip(checkpoints, weights.tolist())):
+            is_first = ind == 0
+
+            # load checkpoint into a temporary ema model
+
+            ckpt_state_dict = torch.load(str(checkpoint))
+            tmp_ema_model.load_state_dict(ckpt_state_dict)
+
+            # add weighted checkpoint to synthesized
+
+            for ckpt_tensor, synth_tensor in zip(tmp_ema_model.iter_all_ema_params_and_buffers(), synthesized_ema_model.iter_all_ema_params_and_buffers()):
+                if is_first:
+                    synth_tensor.zero_()
+
+                synth_tensor.add_(ckpt_tensor * weight)
+
+        # return the synthesized model
 
         return synthesized_ema_model
 
