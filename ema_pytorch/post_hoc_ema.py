@@ -105,12 +105,12 @@ class KarrasEMA(Module):
         self.parameter_names = {
             name
             for name, param in self.ema_model.named_parameters()
-            if param.dtype in [torch.float, torch.float16, torch.bfloat16]
+            if torch.is_floating_point(param) or torch.is_complex(param)
         }
         self.buffer_names = {
             name
             for name, buffer in self.ema_model.named_buffers()
-            if buffer.dtype in [torch.float, torch.float16, torch.bfloat16]
+            if torch.is_floating_point(buffer) or torch.is_complex(buffer)
         }
 
         # tensor update functions
