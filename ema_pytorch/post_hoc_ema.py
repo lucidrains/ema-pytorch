@@ -119,14 +119,14 @@ class KarrasEMA(Module):
     @property
     def model(self):
         return first(self.online_model)
-    
+
     @property
     def beta(self):
         return (1 - 1 / (self.step + 1)) ** (1 + self.gamma)
 
     def eval(self):
         return self.ema_model.eval()
-    
+
     def restore_ema_model_device(self):
         device = self.initted.device
         self.ema_model.to(device)
@@ -266,6 +266,7 @@ class PostHocEMA(Module):
         gammas: Optional[Tuple[float, ...]] = None,
         checkpoint_every_num_steps: int = 1000,
         checkpoint_folder: str = './post-hoc-ema-checkpoints',
+        checkpoint_dtype: torch.dtype = torch.float16,
         **kwargs
     ):
         super().__init__()
@@ -288,6 +289,7 @@ class PostHocEMA(Module):
         assert self.checkpoint_folder.is_dir()
 
         self.checkpoint_every_num_steps = checkpoint_every_num_steps
+        self.checkpoint_dtype = checkpoint_dtype
         self.ema_kwargs = kwargs
 
     @property
@@ -320,7 +322,7 @@ class PostHocEMA(Module):
             filename = f'{ind}.{step}.pt'
             path = self.checkpoint_folder / filename
 
-            pkg = deepcopy(ema_model).half().state_dict()
+            pkg = deepcopy(ema_model).to(self.checkpoint_dtype).state_dict()
             torch.save(pkg, str(path))
 
     @beartype
