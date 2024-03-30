@@ -352,9 +352,7 @@ class PostHocEMA(Module):
 
         for file in checkpoints:
             gamma_ind, timestep = map(int, file.stem.split('.'))
-            gamma = self.gammas[gamma_ind]
-
-            gammas.append(gamma)
+            gammas.append(self.gammas[gamma_ind])
             timesteps.append(timestep)
 
         step = default(step, max(timesteps))
