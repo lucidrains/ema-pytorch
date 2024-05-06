@@ -362,11 +362,11 @@ class PostHocEMA(Module):
 
         # line up with Algorithm 3
 
-        gamma_i = Tensor(gammas, device = device)
-        t_i = Tensor(timesteps, device = device)
+        gamma_i = torch.tensor(gammas, device = device)
+        t_i = torch.tensor(timesteps, device = device)
 
-        gamma_r = Tensor([gamma], device = device)
-        t_r = Tensor([step], device = device)
+        gamma_r = torch.tensor([gamma], device = device)
+        t_r = torch.tensor([step], device = device)
 
         # solve for weights for combining all checkpoints into synthesized, using least squares as in paper
 
