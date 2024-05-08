@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 setup(
   name = 'ema-pytorch',
   packages = find_packages(exclude=[]),
-  version = '0.4.6',
+  version = '0.4.7',
   license='MIT',
   description = 'Easy way to keep track of exponential moving average version of your pytorch module',
   author = 'Phil Wang',
