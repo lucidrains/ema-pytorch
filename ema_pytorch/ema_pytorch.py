@@ -90,7 +90,8 @@ class EMA(Module):
                 print('Your model was not copyable. Please make sure you are not using any LazyLinear')
                 exit()
 
-        self.ema_model.requires_grad_(False)
+        for p in self.ema_model.parameters():
+            p.detach_()
 
         # parameter and buffer names
 
