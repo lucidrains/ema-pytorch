@@ -7,8 +7,7 @@ import torch
 from torch import nn, Tensor
 from torch.nn import Module
 
-from beartype import beartype
-from beartype.typing import Set
+from typing import Set
 
 def exists(val):
     return val is not None
@@ -46,7 +45,6 @@ class EMA(Module):
         min_value (float): The minimum EMA decay rate. Default: 0.
     """
 
-    @beartype
     def __init__(
         self,
         model: Module,

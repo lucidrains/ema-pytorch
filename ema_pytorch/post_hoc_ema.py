@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from pathlib import Path
 from copy import deepcopy
 from functools import partial
@@ -8,8 +10,7 @@ from torch.nn import Module, ModuleList
 
 import numpy as np
 
-from beartype import beartype
-from beartype.typing import Set, Tuple, Optional
+from typing import Set, Tuple
 
 def exists(val):
     return val is not None
@@ -47,13 +48,12 @@ class KarrasEMA(Module):
     can either use gamma or sigma_rel from paper
     """
 
-    @beartype
     def __init__(
         self,
         model: Module,
-        sigma_rel: Optional[float] = None,
-        gamma: Optional[float] = None,
-        ema_model: Optional[Module] = None,           # if your model has lazylinears or other types of non-deepcopyable modules, you can pass in your own ema model
+        sigma_rel: float | None = None,
+        gamma: float | None = None,
+        ema_model: Module | None = None,           # if your model has lazylinears or other types of non-deepcopyable modules, you can pass in your own ema model
         update_every: int = 100,
         frozen: bool = False,
         param_or_buffer_names_no_ema: Set[str] = set(),
@@ -259,12 +259,11 @@ def solve_weights(t_i, gamma_i, t_r, gamma_r):
 
 class PostHocEMA(Module):
 
-    @beartype
     def __init__(
         self,
         model: Module,
-        sigma_rels: Optional[Tuple[float, ...]] = None,
-        gammas: Optional[Tuple[float, ...]] = None,
+        sigma_rels: Tuple[float, ...] | None = None,
+        gammas: Tuple[float, ...] | None = None,
         checkpoint_every_num_steps: int = 1000,
         checkpoint_folder: str = './post-hoc-ema-checkpoints',
         checkpoint_dtype: torch.dtype = torch.float16,
@@ -326,12 +325,11 @@ class PostHocEMA(Module):
             pkg = deepcopy(ema_model).to(self.checkpoint_dtype).state_dict()
             torch.save(pkg, str(path))
 
-    @beartype
     def synthesize_ema_model(
         self,
-        gamma: Optional[float] = None,
-        sigma_rel: Optional[float] = None,
-        step: Optional[int] = None,
+        gamma: float | None = None,
+        sigma_rel: float | None = None,
+        step: int | None = None,
     ) -> KarrasEMA:
         assert exists(gamma) ^ exists(sigma_rel)
         device = self.device
