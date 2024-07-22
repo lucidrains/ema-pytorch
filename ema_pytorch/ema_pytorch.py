@@ -1,4 +1,5 @@
 from __future__ import annotations
+from typing import Set, Tuple
 
 from copy import deepcopy
 from functools import partial
@@ -6,8 +7,6 @@ from functools import partial
 import torch
 from torch import nn, Tensor
 from torch.nn import Module
-
-from typing import Set
 
 def exists(val):
     return val is not None
@@ -60,7 +59,8 @@ class EMA(Module):
         ignore_startswith_names: Set[str] = set(),
         include_online_model = True,                  # set this to False if you do not wish for the online model to be saved along with the ema model (managed externally)
         allow_different_devices = False,              # if the EMA model is on a different device (say CPU), automatically move the tensor
-        use_foreach = False
+        use_foreach = False,
+        forward_method_names: Tuple[str, ...] = ()
     ):
         super().__init__()
         self.beta = beta
@@ -90,6 +90,12 @@ class EMA(Module):
 
         for p in self.ema_model.parameters():
             p.detach_()
+
+        # forwarding methods
+
+        for forward_method_name in forward_method_names:
+            fn = getattr(self.ema_model, forward_method_name)
+            setattr(self, forward_method_name, fn)
 
         # parameter and buffer names
 
