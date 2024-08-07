@@ -304,9 +304,13 @@ class PostHocEMA(Module):
     def device(self):
         return self.step.device
 
-    def copy_params_from_ema_to_model(self):
+    def copy_params_from_model_to_ema(self):
         for ema_model in self.ema_models:
             ema_model.copy_params_from_model_to_ema()
+
+    def copy_params_from_ema_to_model(self):
+        for ema_model in self.ema_models:
+            ema_model.copy_params_from_ema_to_model()
 
     def update(self):
         for ema_model in self.ema_models:
