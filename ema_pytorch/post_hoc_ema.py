@@ -389,7 +389,7 @@ class PostHocEMA(Module):
 
             # load checkpoint into a temporary ema model
 
-            ckpt_state_dict = torch.load(str(checkpoint))
+            ckpt_state_dict = torch.load(str(checkpoint), weights_only=True)
             tmp_ema_model.load_state_dict(ckpt_state_dict)
 
             # add weighted checkpoint to synthesized
