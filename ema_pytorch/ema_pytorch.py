@@ -11,6 +11,9 @@ from torch.nn import Module
 def exists(val):
     return val is not None
 
+def get_module_device(m: Module):
+    return next(m.parameters()).device
+
 def inplace_copy(tgt: Tensor, src: Tensor, *, auto_move_device = False):
     if auto_move_device:
         src = src.to(tgt.device)
@@ -60,7 +63,8 @@ class EMA(Module):
         include_online_model = True,                  # set this to False if you do not wish for the online model to be saved along with the ema model (managed externally)
         allow_different_devices = False,              # if the EMA model is on a different device (say CPU), automatically move the tensor
         use_foreach = False,
-        forward_method_names: Tuple[str, ...] = ()
+        forward_method_names: Tuple[str, ...] = (),
+        move_ema_to_online_device = False
     ):
         super().__init__()
         self.beta = beta
@@ -125,6 +129,10 @@ class EMA(Module):
         # whether to manage if EMA model is kept on a different device
 
         self.allow_different_devices = allow_different_devices
+
+        # whether to move EMA model to online model device automatically
+
+        self.move_ema_to_online_device = move_ema_to_online_device
 
         # whether to use foreach
 
@@ -209,6 +217,13 @@ class EMA(Module):
     def update_moving_average(self, ma_model, current_model):
         if self.is_frozen:
             return
+
+        # move ema model to online model device if not same and needed
+
+        if self.move_ema_to_online_device and get_module_device(ma_model) != get_module_device(current_model):
+            ma_model.to(get_module_device(current_model))
+
+        # get current decay
 
         current_decay = self.get_current_decay()
 

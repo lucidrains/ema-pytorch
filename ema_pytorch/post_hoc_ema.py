@@ -59,7 +59,8 @@ class KarrasEMA(Module):
         param_or_buffer_names_no_ema: Set[str] = set(),
         ignore_names: Set[str] = set(),
         ignore_startswith_names: Set[str] = set(),
-        allow_different_devices = False               # if the EMA model is on a different device (say CPU), automatically move the tensor
+        allow_different_devices = False,              # if the EMA model is on a different device (say CPU), automatically move the tensor
+        move_ema_to_online_device = False             # will move entire EMA model to the same device as online model, if different
     ):
         super().__init__()
 
@@ -111,6 +112,10 @@ class KarrasEMA(Module):
         # whether to manage if EMA model is kept on a different device
 
         self.allow_different_devices = allow_different_devices
+
+        # whether to move EMA model to online model device automatically
+
+        self.move_ema_to_online_device = move_ema_to_online_device
 
         # init and step states
 
@@ -204,6 +209,13 @@ class KarrasEMA(Module):
     def update_moving_average(self, ma_model, current_model):
         if self.frozen:
             return
+
+        # move ema model to online model device if not same and needed
+
+        if self.move_ema_to_online_device and get_module_device(ma_model) != get_module_device(current_model):
+            ma_model.to(get_module_device(current_model))
+
+        # get some functions and current decay
 
         copy, lerp = self.inplace_copy, self.inplace_lerp
         current_decay = self.beta
