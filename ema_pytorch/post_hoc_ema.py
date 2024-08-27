@@ -123,7 +123,7 @@ class KarrasEMA(Module):
 
     @property
     def beta(self):
-        return (1 - 1 / (self.step + 1)) ** (1 + self.gamma)
+        return (1. - 1. / (self.step.item() + 1.)) ** (1. + self.gamma)
 
     def eval(self):
         return self.ema_model.eval()
