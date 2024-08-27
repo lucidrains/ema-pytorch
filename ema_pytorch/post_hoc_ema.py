@@ -219,7 +219,7 @@ class KarrasEMA(Module):
                 copy(ma_params.data, current_params.data)
                 continue
 
-            lerp(ma_params.data, current_params.data, 1. - current_decay)
+            lerp(ma_params.data, current_params.data, 1. - current_decay.to(current_params.device))
 
         for (name, current_buffer), (_, ma_buffer) in zip(self.get_buffers_iter(current_model), self.get_buffers_iter(ma_model)):
             if name in self.ignore_names:
