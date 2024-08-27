@@ -59,7 +59,7 @@ class KarrasEMA(Module):
         param_or_buffer_names_no_ema: Set[str] = set(),
         ignore_names: Set[str] = set(),
         ignore_startswith_names: Set[str] = set(),
-        allow_different_devices = False               # if the EMA model is on a different device (say CPU), automatically move the tensor
+        auto_move_device = False               # if the EMA model is on a different device (say CPU), automatically move the tensor
     ):
         super().__init__()
 
@@ -95,8 +95,8 @@ class KarrasEMA(Module):
 
         # tensor update functions
 
-        self.inplace_copy = partial(inplace_copy, auto_move_device = allow_different_devices)
-        self.inplace_lerp = partial(inplace_lerp, auto_move_device = allow_different_devices)
+        self.inplace_copy = partial(inplace_copy, auto_move_device = auto_move_device)
+        self.inplace_lerp = partial(inplace_lerp, auto_move_device = auto_move_device)
 
         # updating hyperparameters
 
@@ -110,7 +110,7 @@ class KarrasEMA(Module):
 
         # whether to manage if EMA model is kept on a different device
 
-        self.allow_different_devices = allow_different_devices
+        self.auto_move_device = auto_move_device
 
         # init and step states
 

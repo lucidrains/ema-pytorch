@@ -58,7 +58,7 @@ class EMA(Module):
         ignore_names: Set[str] = set(),
         ignore_startswith_names: Set[str] = set(),
         include_online_model = True,                  # set this to False if you do not wish for the online model to be saved along with the ema model (managed externally)
-        allow_different_devices = False,              # if the EMA model is on a different device (say CPU), automatically move the tensor
+        auto_move_device = False,                     # if the EMA model is on a different device (say CPU), automatically move the tensor
         use_foreach = False,
         forward_method_names: Tuple[str, ...] = ()
     ):
@@ -104,8 +104,8 @@ class EMA(Module):
 
         # tensor update functions
 
-        self.inplace_copy = partial(inplace_copy, auto_move_device = allow_different_devices)
-        self.inplace_lerp = partial(inplace_lerp, auto_move_device = allow_different_devices)
+        self.inplace_copy = partial(inplace_copy, auto_move_device = auto_move_device)
+        self.inplace_lerp = partial(inplace_lerp, auto_move_device = auto_move_device)
 
         # updating hyperparameters
 
@@ -124,7 +124,7 @@ class EMA(Module):
 
         # whether to manage if EMA model is kept on a different device
 
-        self.allow_different_devices = allow_different_devices
+        self.auto_move_device = auto_move_device
 
         # whether to use foreach
 
@@ -260,7 +260,7 @@ class EMA(Module):
         else:
             # use foreach if available and specified
 
-            if self.allow_different_devices:
+            if self.auto_move_device:
                 tensors_to_copy = [(tgt, src.to(tgt.device)) for tgt, src in tensors_to_copy]
                 tensors_to_lerp = [(tgt, src.to(tgt.device)) for tgt, src in tensors_to_lerp]
 
