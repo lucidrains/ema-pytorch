@@ -14,15 +14,27 @@ def exists(val):
 def get_module_device(m: Module):
     return next(m.parameters()).device
 
-def inplace_copy(tgt: Tensor, src: Tensor, *, auto_move_device = False):
+def maybe_coerce_dtype(t, dtype):
+    if t.dtype == dtype:
+        return t
+
+    return t.to(dtype)
+
+def inplace_copy(tgt: Tensor, src: Tensor, *, auto_move_device = False, coerce_dtype = False):
     if auto_move_device:
         src = src.to(tgt.device)
+
+    if coerce_dtype:
+        src = maybe_coerce_dtype(src, tgt.dtype)
 
     tgt.copy_(src)
 
-def inplace_lerp(tgt: Tensor, src: Tensor, weight, *, auto_move_device = False):
+def inplace_lerp(tgt: Tensor, src: Tensor, weight, *, auto_move_device = False, coerce_dtype = False):
     if auto_move_device:
         src = src.to(tgt.device)
+
+    if coerce_dtype:
+        src = maybe_coerce_dtype(src, tgt.dtype)
 
     tgt.lerp_(src, weight)
 
@@ -64,7 +76,8 @@ class EMA(Module):
         allow_different_devices = False,              # if the EMA model is on a different device (say CPU), automatically move the tensor
         use_foreach = False,
         forward_method_names: Tuple[str, ...] = (),
-        move_ema_to_online_device = False
+        move_ema_to_online_device = False,
+        coerce_dtype = False
     ):
         super().__init__()
         self.beta = beta
@@ -108,8 +121,8 @@ class EMA(Module):
 
         # tensor update functions
 
-        self.inplace_copy = partial(inplace_copy, auto_move_device = allow_different_devices)
-        self.inplace_lerp = partial(inplace_lerp, auto_move_device = allow_different_devices)
+        self.inplace_copy = partial(inplace_copy, auto_move_device = allow_different_devices, coerce_dtype = coerce_dtype)
+        self.inplace_lerp = partial(inplace_lerp, auto_move_device = allow_different_devices, coerce_dtype = coerce_dtype)
 
         # updating hyperparameters
 
@@ -129,6 +142,10 @@ class EMA(Module):
         # whether to manage if EMA model is kept on a different device
 
         self.allow_different_devices = allow_different_devices
+
+        # whether to coerce dtype when copy or lerp from online to EMA model
+
+        self.coerce_dtype = coerce_dtype
 
         # whether to move EMA model to online model device automatically
 
@@ -278,6 +295,10 @@ class EMA(Module):
             if self.allow_different_devices:
                 tensors_to_copy = [(tgt, src.to(tgt.device)) for tgt, src in tensors_to_copy]
                 tensors_to_lerp = [(tgt, src.to(tgt.device)) for tgt, src in tensors_to_lerp]
+
+            if self.coerce_dtype:
+                tensors_to_copy = [(tgt, maybe_coerce_dtype(src, tgt.dtype)) for tgt, src in tensors_to_copy]
+                tensors_to_lerp = [(tgt, maybe_coerce_dtype(src, tgt.dtype)) for tgt, src in tensors_to_lerp]
 
             if len(tensors_to_copy) > 0:
                 tgt_copy, src_copy = zip(*tensors_to_copy)
