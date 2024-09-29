@@ -5,8 +5,73 @@ from copy import deepcopy
 from functools import partial
 
 import torch
-from torch import nn, Tensor
+from torch import Tensor
 from torch.nn import Module
+
+# Define a custom demotion hierarchy using dictionaries for fast lookups.
+# Levels are integers indicating precision, with higher numbers being more precise.
+FLOAT_HIERARCHY = {
+    torch.float64: 8,
+    torch.float32: 7,
+    torch.bfloat16: 6,
+    torch.float16: 5,
+}
+
+INT_HIERARCHY = {
+    torch.int64: 4,
+    torch.int32: 3,
+    torch.int16: 2,
+    torch.int8: 1,
+}
+
+BOOL_HIERARCHY = {
+    torch.bool: 0,
+}
+
+# Reverse mappings to find dtype from level.
+REVERSE_FLOAT_HIERARCHY = {v: k for k, v in FLOAT_HIERARCHY.items()}
+REVERSE_INT_HIERARCHY = {v: k for k, v in INT_HIERARCHY.items()}
+REVERSE_BOOL_HIERARCHY = {v: k for k, v in BOOL_HIERARCHY.items()}
+
+def demote_types(type1: torch.dtype, type2: torch.dtype) -> torch.dtype:
+    """
+    Demotes the given PyTorch data types to the lowest precision type
+    that both input types can be cast to.
+    
+    Args:
+        type1 (torch.dtype): The first PyTorch data type.
+        type2 (torch.dtype): The second PyTorch data type.
+
+    Returns:
+        torch.dtype: The demoted PyTorch data type.
+    """
+    # Check if the types are supported
+    if not any([type1 in h for h in [FLOAT_HIERARCHY, INT_HIERARCHY, BOOL_HIERARCHY]]):
+        raise ValueError(f"Unsupported type1: {type1}")
+    if not any([type2 in h for h in [FLOAT_HIERARCHY, INT_HIERARCHY, BOOL_HIERARCHY]]):
+        raise ValueError(f"Unsupported type2: {type2}")
+
+    # Get the hierarchy level of each type
+    h1 = FLOAT_HIERARCHY if type1 in FLOAT_HIERARCHY else INT_HIERARCHY if type1 in INT_HIERARCHY else BOOL_HIERARCHY
+    h2 = FLOAT_HIERARCHY if type2 in FLOAT_HIERARCHY else INT_HIERARCHY if type2 in INT_HIERARCHY else BOOL_HIERARCHY
+
+    if h1 is not h2:
+        raise ValueError(f"Type hierarchies do not match: {type1}, {type2}")
+    
+    # Get the level of each type
+    level1 = h1[type1]
+    level2 = h2[type2]
+
+    # Get the minimum level between the two types
+    demoted_level = min(level1, level2)
+
+    # Return the dtype corresponding to the demoted level
+    if demoted_level in REVERSE_FLOAT_HIERARCHY:
+        return REVERSE_FLOAT_HIERARCHY[demoted_level]
+    if demoted_level in REVERSE_INT_HIERARCHY:
+        return REVERSE_INT_HIERARCHY[demoted_level]
+    if demoted_level in REVERSE_BOOL_HIERARCHY:
+        return REVERSE_BOOL_HIERARCHY[demoted_level]
 
 def exists(val):
     return val is not None
@@ -14,18 +79,22 @@ def exists(val):
 def get_module_device(m: Module):
     return next(m.parameters()).device
 
-def maybe_coerce_dtype(t, dtype):
-    if t.dtype == dtype:
-        return t
+def maybe_coerce_dtype(tgt, src):
+    if tgt.dtype == src.dtype:
+        return tgt, src
 
-    return t.to(dtype)
+    # demote types to minimize EMA memory usage
+
+    demoted_dtype = demote_types(tgt.dtype, src.dtype)
+
+    return tgt.to(demoted_dtype), src.to(demoted_dtype)
 
 def inplace_copy(tgt: Tensor, src: Tensor, *, auto_move_device = False, coerce_dtype = False):
     if auto_move_device:
         src = src.to(tgt.device)
 
     if coerce_dtype:
-        src = maybe_coerce_dtype(src, tgt.dtype)
+        tgt, src = maybe_coerce_dtype(tgt, src)
 
     tgt.copy_(src)
 
@@ -34,7 +103,7 @@ def inplace_lerp(tgt: Tensor, src: Tensor, weight, *, auto_move_device = False, 
         src = src.to(tgt.device)
 
     if coerce_dtype:
-        src = maybe_coerce_dtype(src, tgt.dtype)
+        tgt, src = maybe_coerce_dtype(tgt, src)
 
     tgt.lerp_(src, weight)
 
@@ -297,8 +366,8 @@ class EMA(Module):
                 tensors_to_lerp = [(tgt, src.to(tgt.device)) for tgt, src in tensors_to_lerp]
 
             if self.coerce_dtype:
-                tensors_to_copy = [(tgt, maybe_coerce_dtype(src, tgt.dtype)) for tgt, src in tensors_to_copy]
-                tensors_to_lerp = [(tgt, maybe_coerce_dtype(src, tgt.dtype)) for tgt, src in tensors_to_lerp]
+                tensors_to_copy = [maybe_coerce_dtype(tgt, src) for tgt, src in tensors_to_copy]
+                tensors_to_lerp = [maybe_coerce_dtype(tgt, src) for tgt, src in tensors_to_lerp]
 
             if len(tensors_to_copy) > 0:
                 tgt_copy, src_copy = zip(*tensors_to_copy)
