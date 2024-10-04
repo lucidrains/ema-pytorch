@@ -107,3 +107,14 @@ synthesized_ema_output = synthesized_ema(data)
     url     = {https://api.semanticscholar.org/CorpusID:265659032}
 }
 ```
+
+```bibtex
+@article{Lee2024SlowAS,
+    title   = {Slow and Steady Wins the Race: Maintaining Plasticity with Hare and Tortoise Networks},
+    author  = {Hojoon Lee and Hyeonseo Cho and Hyunseung Kim and Donghu Kim and Dugki Min and Jaegul Choo and Clare Lyle},
+    journal = {ArXiv},
+    year    = {2024},
+    volume  = {abs/2406.02596},
+    url     = {https://api.semanticscholar.org/CorpusID:270258586}
+}
+```

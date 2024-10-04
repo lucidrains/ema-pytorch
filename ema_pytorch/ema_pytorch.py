@@ -216,6 +216,12 @@ class EMA(Module):
         for (_, ma_buffers), (_, current_buffers) in zip(self.get_buffers_iter(self.ema_model), self.get_buffers_iter(self.model)):
             copy(current_buffers.data, ma_buffers.data)
 
+    def update_model_from_ema(self, decay):
+        if decay == 0.:
+            return self.copy_params_from_ema_to_model()
+
+        self.update_moving_average(self.model, self.ema_model, decay)
+
     def get_current_decay(self):
         epoch = (self.step - self.update_after_step - 1).clamp(min = 0.)
         value = 1 - (1 + epoch / self.inv_gamma) ** - self.power
@@ -247,7 +253,7 @@ class EMA(Module):
         self.update_moving_average(self.ema_model, self.model)
 
     @torch.no_grad()
-    def update_moving_average(self, ma_model, current_model):
+    def update_moving_average(self, ma_model, current_model, current_decay = None):
         if self.is_frozen:
             return
 
@@ -258,7 +264,8 @@ class EMA(Module):
 
         # get current decay
 
-        current_decay = self.get_current_decay()
+        if not exists(current_decay):
+            current_decay = self.get_current_decay()
 
         # store all source and target tensors to copy or lerp
 
