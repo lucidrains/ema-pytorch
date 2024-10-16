@@ -95,6 +95,18 @@ synthesized_ema_output = synthesized_ema(data)
 
 ```
 
+For testing out the claims of a free lunch from the <a href="https://arxiv.org/abs/2402.09240">`Switch EMA`</a> paper, just set `update_model_with_ema_every` as so
+
+```python
+
+ema = EMA(
+    net,
+    ...,
+    update_model_with_ema_every = 10000 # say 10k steps is 1 epoch
+)
+
+```
+
 ## Citations
 
 ```bibtex
@@ -116,5 +128,16 @@ synthesized_ema_output = synthesized_ema(data)
     year    = {2024},
     volume  = {abs/2406.02596},
     url     = {https://api.semanticscholar.org/CorpusID:270258586}
+}
+```
+
+```bibtex
+@article{Li2024SwitchEA,
+    title   = {Switch EMA: A Free Lunch for Better Flatness and Sharpness},
+    author  = {Siyuan Li and Zicheng Liu and Juanxi Tian and Ge Wang and Zedong Wang and Weiyang Jin and Di Wu and Cheng Tan and Tao Lin and Yang Liu and Baigui Sun and Stan Z. Li},
+    journal = {ArXiv},
+    year    = {2024},
+    volume  = {abs/2402.09240},
+    url     = {https://api.semanticscholar.org/CorpusID:267657558}
 }
 ```
