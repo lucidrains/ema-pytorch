@@ -105,6 +105,10 @@ ema = EMA(
     update_model_with_ema_every = 10000 # say 10k steps is 1 epoch
 )
 
+# or you can do it manually at the end of each epoch
+
+ema.update_model_with_ema()
+
 ```
 
 ## Citations
