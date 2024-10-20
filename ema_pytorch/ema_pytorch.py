@@ -185,13 +185,21 @@ class EMA(Module):
         self.parameter_names = {name for name, param in self.ema_model.named_parameters() if torch.is_floating_point(param) or torch.is_complex(param)}
         self.buffer_names = {name for name, buffer in self.ema_model.named_buffers() if torch.is_floating_point(buffer) or torch.is_complex(buffer)}
 
+    def add_to_optimizer_post_step_hook(self, optimizer):
+        assert hasattr(optimizer, 'register_step_post_hook')
+
+        def hook(*_):
+            self.update()
+
+        optimizer.register_step_post_hook(hook)
+
     @property
     def model(self):
         return self.online_model if self.include_online_model else self.online_model[0]
 
     def eval(self):
         return self.ema_model.eval()
-    
+
     def restore_ema_model_device(self):
         device = self.initted.device
         self.ema_model.to(device)
