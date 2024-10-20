@@ -200,6 +200,14 @@ class EMA(Module):
     def eval(self):
         return self.ema_model.eval()
 
+    @torch.no_grad()
+    def forward_eval(self, *args, **kwargs):
+        # handy function for invoking ema model with no grad + eval
+        training = self.ema_model.training
+        out = self.ema_model(*args, **kwargs)
+        self.ema_model.train(training)
+        return out
+
     def restore_ema_model_device(self):
         device = self.initted.device
         self.ema_model.to(device)
