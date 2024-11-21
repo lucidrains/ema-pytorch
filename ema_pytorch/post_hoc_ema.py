@@ -347,7 +347,10 @@ class PostHocEMA(Module):
             filename = f'{ind}.{step}.pt'
             path = self.checkpoint_folder / filename
 
-            pkg = deepcopy(ema_model).to(self.checkpoint_dtype).state_dict()
+            pkg = {
+                    k: v.to(self.checkpoint_dtype)
+                    for k, v in ema_model.state_dict().items()
+            }
             torch.save(pkg, str(path))
 
     def synthesize_ema_model(
