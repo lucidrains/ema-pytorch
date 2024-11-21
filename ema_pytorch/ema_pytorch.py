@@ -101,7 +101,7 @@ class EMA(Module):
 
         # handle callable returning ema module
 
-        if callable(ema_model):
+        if not isinstance(ema_model, Module) and callable(ema_model):
             ema_model = ema_model()
 
         # ema model
