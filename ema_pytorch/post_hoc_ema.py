@@ -22,6 +22,9 @@ def default(val, d):
 def first(arr):
     return arr[0]
 
+def divisible_by(num, den):
+    return (num % den) == 0
+
 def get_module_device(m: Module):
     return next(m.parameters()).device
 
@@ -337,9 +340,11 @@ class PostHocEMA(Module):
         for ema_model in self.ema_models:
             ema_model.update()
 
-        if not (self.checkpoint_every_num_steps == 'manual'):
-            if not (self.step.item() % self.checkpoint_every_num_steps):
-                self.checkpoint()
+        if self.checkpoint_every_num_steps == 'manual':
+            return
+
+        if divisible_by(self.step.item(), self.checkpoint_every_num_steps):
+            self.checkpoint()
 
     def checkpoint(self):
         step = self.step.item()
