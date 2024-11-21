@@ -1,4 +1,5 @@
 from __future__ import annotations
+from typing import Callable
 
 from pathlib import Path
 from copy import deepcopy
@@ -53,7 +54,7 @@ class KarrasEMA(Module):
         model: Module,
         sigma_rel: float | None = None,
         gamma: float | None = None,
-        ema_model: Module | None = None,           # if your model has lazylinears or other types of non-deepcopyable modules, you can pass in your own ema model
+        ema_model: Module | Callable[[], Module] | None = None,           # if your model has lazylinears or other types of non-deepcopyable modules, you can pass in your own ema model
         update_every: int = 100,
         frozen: bool = False,
         param_or_buffer_names_no_ema: Set[str] = set(),
@@ -73,6 +74,11 @@ class KarrasEMA(Module):
         self.frozen = frozen
 
         self.online_model = [model]
+
+        # handle callable returning ema module
+
+        if callable(ema_model):
+            ema_model = ema_model()
 
         # ema model
 
@@ -274,6 +280,7 @@ class PostHocEMA(Module):
     def __init__(
         self,
         model: Module,
+        ema_model: Callable[[], Module] | None = None,
         sigma_rels: Tuple[float, ...] | None = None,
         gammas: Tuple[float, ...] | None = None,
         checkpoint_every_num_steps: int = 1000,
@@ -290,11 +297,13 @@ class PostHocEMA(Module):
         assert len(gammas) > 1, 'at least 2 ema models with different gammas in order to synthesize new ema models of a different gamma'
         assert len(set(gammas)) == len(gammas), 'calculated gammas must be all unique'
 
+        self.maybe_ema_model = ema_model
+
         self.gammas = gammas
         self.num_ema_models = len(gammas)
 
         self._model = [model]
-        self.ema_models = ModuleList([KarrasEMA(model, gamma = gamma, **kwargs) for gamma in gammas])
+        self.ema_models = ModuleList([KarrasEMA(model, ema_model = ema_model, gamma = gamma, **kwargs) for gamma in gammas])
 
         self.checkpoint_folder = Path(checkpoint_folder)
         self.checkpoint_folder.mkdir(exist_ok = True, parents = True)
@@ -355,6 +364,7 @@ class PostHocEMA(Module):
 
         synthesized_ema_model = KarrasEMA(
             model = self.model,
+            ema_model = self.maybe_ema_model,
             gamma = gamma,
             **self.ema_kwargs
         )
@@ -392,6 +402,7 @@ class PostHocEMA(Module):
 
         tmp_ema_model = KarrasEMA(
             model = self.model,
+            ema_model = self.maybe_ema_model,
             gamma = gamma,
             **self.ema_kwargs
         )

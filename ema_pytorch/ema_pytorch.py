@@ -1,4 +1,5 @@
 from __future__ import annotations
+from typing import Callable
 
 from copy import deepcopy
 from functools import partial
@@ -64,7 +65,7 @@ class EMA(Module):
     def __init__(
         self,
         model: Module,
-        ema_model: Module | None = None,             # if your model has lazylinears or other types of non-deepcopyable modules, you can pass in your own ema model
+        ema_model: Module | Callable[[], Module] | None = None,             # if your model has lazylinears or other types of non-deepcopyable modules, you can pass in your own ema model
         beta = 0.9999,
         update_after_step = 100,
         update_every = 10,
@@ -82,7 +83,7 @@ class EMA(Module):
         forward_method_names: tuple[str, ...] = (),
         move_ema_to_online_device = False,
         coerce_dtype = False,
-        lazy_init_ema = False
+        lazy_init_ema = False,
     ):
         super().__init__()
         self.beta = beta
@@ -97,6 +98,11 @@ class EMA(Module):
             self.online_model = model
         else:
             self.online_model = [model] # hack
+
+        # handle callable returning ema module
+
+        if callable(ema_model):
+            ema_model = ema_model()
 
         # ema model
 
