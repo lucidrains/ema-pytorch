@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Callable
+from typing import Callable, Literal
 
 from pathlib import Path
 from copy import deepcopy
@@ -283,7 +283,7 @@ class PostHocEMA(Module):
         ema_model: Callable[[], Module] | None = None,
         sigma_rels: Tuple[float, ...] | None = None,
         gammas: Tuple[float, ...] | None = None,
-        checkpoint_every_num_steps: int = 1000,
+        checkpoint_every_num_steps: int | Literal['manual'] = 1000,
         checkpoint_folder: str = './post-hoc-ema-checkpoints',
         checkpoint_dtype: torch.dtype = torch.float16,
         **kwargs
@@ -337,8 +337,9 @@ class PostHocEMA(Module):
         for ema_model in self.ema_models:
             ema_model.update()
 
-        if not (self.step.item() % self.checkpoint_every_num_steps):
-            self.checkpoint()
+        if not (self.checkpoint_every_num_steps == 'manual'):
+            if not (self.step.item() % self.checkpoint_every_num_steps):
+                self.checkpoint()
 
     def checkpoint(self):
         step = self.step.item()
@@ -347,7 +348,10 @@ class PostHocEMA(Module):
             filename = f'{ind}.{step}.pt'
             path = self.checkpoint_folder / filename
 
-            pkg = deepcopy(ema_model).to(self.checkpoint_dtype).state_dict()
+            pkg = {
+                    k: v.to(self.checkpoint_dtype)
+                    for k, v in ema_model.state_dict().items()
+            }
             torch.save(pkg, str(path))
 
     def synthesize_ema_model(
