@@ -352,7 +352,7 @@ class PostHocEMA(Module):
             path = self.checkpoint_folder / filename
 
             pkg = {
-                k: v.to(self.checkpoint_dtype)
+                k: v.to(device = 'cpu', dtype = self.checkpoint_dtype, copy = True)
                 for k, v in ema_model.state_dict().items()
             }
 
