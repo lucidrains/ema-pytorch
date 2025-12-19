@@ -7,7 +7,7 @@ from functools import partial
 import torch
 from torch import nn, Tensor
 from torch.nn import Module
-from torch.utils import _pytree as pytree
+from torch.utils import _pytree as pytree_pkg
 
 def exists(val):
     return val is not None
@@ -36,8 +36,8 @@ def inplace_lerp(tgt: Tensor, src: Tensor, weight, *, coerce_dtype = False):
 class EMAPytree(Module):
     def __init__(
         self,
-        model: Any,
-        ema_model: Any | Callable[[], Any] | None = None,
+        pytree: Any,
+        ema_pytree: Any | Callable[[], Any] | None = None,
         beta = 0.9999,
         update_after_step = 100,
         update_every = 10,
@@ -50,21 +50,21 @@ class EMAPytree(Module):
         self.beta = beta
         self.is_frozen = beta == 1.
 
-        self.online_model = [model] # hack to avoid being registered as submodule if it happens to be one
+        self.online_pytree = [pytree] # hack to avoid being registered as submodule if it happens to be one
 
         # handle callable returning ema module
 
-        if not exists(ema_model) and callable(ema_model):
-            ema_model = ema_model()
+        if not exists(ema_pytree) and callable(ema_pytree):
+            ema_pytree = ema_pytree()
 
-        self.ema_model = ema_model
+        self.ema_pytree = ema_pytree
 
-        if not exists(self.ema_model):
-            self.ema_model = deepcopy(model)
+        if not exists(self.ema_pytree):
+            self.ema_pytree = deepcopy(pytree)
 
         # detach all tensors in ema model
 
-        ema_tensors, _ = pytree.tree_flatten(self.ema_model)
+        ema_tensors, _ = pytree_pkg.tree_flatten(self.ema_pytree)
         for p in ema_tensors:
             if isinstance(p, Tensor):
                 p.detach_()
@@ -91,14 +91,14 @@ class EMAPytree(Module):
         self.register_buffer('step', torch.tensor(0))
 
     @property
-    def model(self):
-        return self.online_model[0]
+    def pytree(self):
+        return self.online_pytree[0]
 
-    def copy_params_from_model_to_ema(self):
+    def copy_params_from_pytree_to_ema(self):
         copy = self.inplace_copy
 
-        ema_tensors, _ = pytree.tree_flatten(self.ema_model)
-        online_tensors, _ = pytree.tree_flatten(self.model)
+        ema_tensors, _ = pytree_pkg.tree_flatten(self.ema_pytree)
+        online_tensors, _ = pytree_pkg.tree_flatten(self.pytree)
 
         for ma_tensor, online_tensor in zip(ema_tensors, online_tensors):
             if isinstance(ma_tensor, Tensor) and isinstance(online_tensor, Tensor):
@@ -118,38 +118,38 @@ class EMAPytree(Module):
         self.step += 1
 
         if not self.initted.item():
-            self.copy_params_from_model_to_ema()
+            self.copy_params_from_pytree_to_ema()
             self.initted.data.copy_(torch.tensor(True))
             return
 
         should_update = divisible_by(step, self.update_every)
 
         if should_update and step <= self.update_after_step:
-            self.copy_params_from_model_to_ema()
+            self.copy_params_from_pytree_to_ema()
             return
 
         if should_update:
-            self.update_moving_average(self.ema_model, self.model)
+            self.update_moving_average(self.ema_pytree, self.pytree)
 
     @torch.no_grad()
-    def update_moving_average(self, ma_model, current_model, current_decay = None):
+    def update_moving_average(self, ma_pytree, current_pytree, current_decay = None):
         if self.is_frozen:
             return
 
         if not exists(current_decay):
             current_decay = self.get_current_decay()
 
-        ema_tensors, _ = pytree.tree_flatten(ma_model)
-        online_tensors, _ = pytree.tree_flatten(current_model)
+        ema_tensors, _ = pytree_pkg.tree_flatten(ma_pytree)
+        online_tensors, _ = pytree_pkg.tree_flatten(current_pytree)
 
         for ma_tensor, online_tensor in zip(ema_tensors, online_tensors):
             if isinstance(ma_tensor, Tensor) and isinstance(online_tensor, Tensor):
                 self.inplace_lerp(ma_tensor.data, online_tensor.data, 1. - current_decay)
 
     def __call__(self, *args, **kwargs):
-        if callable(self.ema_model):
-            return self.ema_model(*args, **kwargs)
-        return self.ema_model
+        if callable(self.ema_pytree):
+            return self.ema_pytree(*args, **kwargs)
+        return self.ema_pytree
 
 if __name__ == '__main__':
     online_tree = {
@@ -171,10 +171,10 @@ if __name__ == '__main__':
         online_tree['w'].fill_(1.0)
         online_tree['b'].fill_(1.0)
 
-    old_ema_w = ema_tree.ema_model['w'].clone()
+    old_ema_w = ema_tree.ema_pytree['w'].clone()
     ema_tree.update() # lerp
 
     expected_w = 0.5 * old_ema_w + 0.5 * online_tree['w']
-    assert torch.allclose(ema_tree.ema_model['w'], expected_w)
+    assert torch.allclose(ema_tree.ema_pytree['w'], expected_w)
     
     print('success')
