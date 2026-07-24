@@ -3,7 +3,7 @@ import inspect
 from typing import Callable
 
 import torch
-from torch import nn, Tensor
+from torch import nn
 from torch.nn import Module
 
 from ema_pytorch.ema_pytorch import EMA, exists
@@ -207,10 +207,24 @@ class EMAModuleWrapper(Module):
     def forward_online(
         self,
         *args,
+        only_online: bool = False,
+        only_ema: bool = False,
         ema_args: tuple | None = None,
         ema_kwargs: dict | None = None,
         **kwargs
     ):
+        assert not (only_online and only_ema), 'cannot set both only_online and only_ema to True'
+
+        if only_online or only_ema:
+            assert not exists(ema_args) and not exists(ema_kwargs), 'cannot pass ema_args or ema_kwargs when only_online or only_ema is True'
+
+        if only_ema:
+            return self.ema_model(*args, **kwargs)
+
+        if only_online:
+            self._captured_ema_outputs.clear()
+            return self.model(*args, **kwargs)
+
         assert exists(self.ema_model), "EMA model is not initialized yet"
         self._captured_ema_outputs.clear()
 
@@ -233,15 +247,30 @@ class EMAModuleWrapper(Module):
         self._captured_ema_outputs.clear()
         return out
 
-    def __call__(
+    def forward(
         self,
         *args,
         forward_online: bool | None = None,
+        only_online: bool = False,
+        only_ema: bool = False,
         ema_args: tuple | None = None,
         ema_kwargs: dict | None = None,
         **kwargs
     ):
-        if default(forward_online, exists(self.ema_module_kwargs) and self.model.training and self.forward_online_during_train):
-            return self.forward_online(*args, ema_args = ema_args, ema_kwargs = ema_kwargs, **kwargs)
+        if (
+            only_online or
+            only_ema or
+            default(forward_online, exists(self.ema_module_kwargs) and self.model.training and self.forward_online_during_train)
+        ):
+            return self.forward_online(
+                *args,
+                only_online = only_online,
+                only_ema = only_ema,
+                ema_args = ema_args,
+                ema_kwargs = ema_kwargs,
+                **kwargs
+            )
 
         return self.ema_model(*args, **kwargs)
+
+    __call__ = forward

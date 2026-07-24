@@ -337,3 +337,74 @@ def test_invalid_kwarg_raises_assertion_at_init():
             model,
             ema_module_kwargs = {'sub': 'sub'}
         )
+
+def test_forward_only_online_and_only_ema_flags():
+
+    class SubBlock(nn.Module):
+        def __init__(self, dim):
+            super().__init__()
+            self.linear = nn.Linear(dim, dim)
+
+        def forward(self, x, ema_output = None):
+            h = self.linear(x)
+            return h, ema_output
+
+    class Model(nn.Module):
+        def __init__(self, dim = 8):
+            super().__init__()
+            self.sub_a = SubBlock(dim)
+            self.sub_b = SubBlock(dim)
+
+        def forward(self, x):
+            out_a, kwarg_a = self.sub_a(x)
+            out_b, kwarg_b = self.sub_b(out_a)
+            return out_b, kwarg_a, kwarg_b
+
+    model = Model(8)
+    model.train()
+
+    ema = EMAModuleWrapper(
+        model,
+        beta = 0.9,
+        update_after_step = 0,
+        update_every = 1,
+        ema_module_kwargs = {
+            'sub_a': 'sub_b'
+        }
+    )
+    ema.update()
+
+    x = torch.randn(2, 8)
+
+    # 1. Standard forward_online harvests EMA sub_b output into sub_a kwarg
+    out, kwarg_a, kwarg_b = ema(x)
+    assert exists(kwarg_a)
+
+    # 2. only_online flag: skips harvesting EMA, kwarg_a is None
+    out_online, kwarg_a_online, _ = ema(x, only_online = True)
+    assert kwarg_a_online is None
+    assert torch.allclose(out_online, model(x)[0])
+
+    out_online_method, kwarg_a_online_method, _ = ema.forward_online(x, only_online = True)
+    assert kwarg_a_online_method is None
+    assert torch.allclose(out_online_method, out_online)
+
+    # 3. only_ema flag: forwards through EMA model
+    out_ema, kwarg_a_ema, _ = ema(x, only_ema = True)
+    assert kwarg_a_ema is None
+    assert torch.allclose(out_ema, ema.ema_model(x)[0])
+
+    out_ema_method, kwarg_a_ema_method, _ = ema.forward_online(x, only_ema = True)
+    assert kwarg_a_ema_method is None
+    assert torch.allclose(out_ema_method, out_ema)
+
+    # 4. Error when both only_online and only_ema are True
+    with pytest.raises(AssertionError):
+        ema(x, only_online = True, only_ema = True)
+
+    # 5. Error when passing ema_args or ema_kwargs with only_online or only_ema
+    with pytest.raises(AssertionError):
+        ema(x, only_online = True, ema_args = (x,))
+
+    with pytest.raises(AssertionError):
+        ema(x, only_ema = True, ema_kwargs = {'x': x})
