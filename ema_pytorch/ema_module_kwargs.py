@@ -1,6 +1,6 @@
 from __future__ import annotations
 import inspect
-from typing import Callable
+from typing import Callable, Any
 
 import torch
 from torch import nn
@@ -10,8 +10,27 @@ from ema_pytorch.ema_pytorch import EMA, exists
 
 # helpers
 
+def identity(ema_args, ema_kwargs):
+    return ema_args, ema_kwargs
+
 def default(val, d):
     return val if exists(val) else (d() if callable(d) else d)
+
+def normalize_ema_args_kwargs(
+    ema_args: Any | None,
+    ema_kwargs: dict | None
+) -> tuple[tuple | None, dict | None]:
+    if not exists(ema_args):
+        return None, ema_kwargs
+
+    if isinstance(ema_args, dict):
+        ema_kwargs = {**ema_args, **default(ema_kwargs, {})}
+        return (), ema_kwargs
+
+    if isinstance(ema_args, tuple):
+        return ema_args, ema_kwargs
+
+    return (ema_args,), ema_kwargs
 
 def get_submodule(model: Module, path: str) -> Module:
     if not path or path == '.':
@@ -209,8 +228,9 @@ class EMAModuleWrapper(Module):
         *args,
         only_online: bool = False,
         only_ema: bool = False,
-        ema_args: tuple | None = None,
+        ema_args: Any = None,
         ema_kwargs: dict | None = None,
+        auto_normalize_ema_args: bool = True,
         **kwargs
     ):
         assert not (only_online and only_ema), 'cannot set both only_online and only_ema to True'
@@ -234,6 +254,10 @@ class EMAModuleWrapper(Module):
             training_state = self.ema_model.training
             self.ema_model.eval()
 
+            normalize_fn = normalize_ema_args_kwargs if auto_normalize_ema_args else identity
+
+            ema_args, ema_kwargs = normalize_fn(ema_args, ema_kwargs)
+
             ema_forward_args = default(ema_args, args)
             ema_forward_kwargs = default(ema_kwargs, kwargs)
 
@@ -253,8 +277,9 @@ class EMAModuleWrapper(Module):
         forward_online: bool | None = None,
         only_online: bool = False,
         only_ema: bool = False,
-        ema_args: tuple | None = None,
+        ema_args: Any = None,
         ema_kwargs: dict | None = None,
+        auto_normalize_ema_args: bool = True,
         **kwargs
     ):
         if (
@@ -268,9 +293,8 @@ class EMAModuleWrapper(Module):
                 only_ema = only_ema,
                 ema_args = ema_args,
                 ema_kwargs = ema_kwargs,
+                auto_normalize_ema_args = auto_normalize_ema_args,
                 **kwargs
             )
 
         return self.ema_model(*args, **kwargs)
-
-    __call__ = forward

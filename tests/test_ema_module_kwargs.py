@@ -124,7 +124,8 @@ def test_ema_module_wrapper_scenarios():
     assert exists(ema_a)
     assert exists(custom_b)
 
-def test_multi_view_ssl():
+@pytest.mark.parametrize('ema_args_type', ('tuple', 'raw'))
+def test_multi_view_ssl(ema_args_type):
 
     class Block(nn.Module):
         def __init__(self, dim):
@@ -176,13 +177,22 @@ def test_multi_view_ssl():
     student_input = torch.randn(2, 8)
     teacher_input = torch.randn(2, 8)
 
-    out, loss = ema(student_input, ema_args = (teacher_input,))
+    if ema_args_type == 'tuple':
+        ema_args = (teacher_input,)
+    else:
+        ema_args = teacher_input
+
+    out, loss = ema(student_input, ema_args = ema_args)
 
     assert is_tensor(loss)
     loss.backward()
     ema.update()
 
-def test_self_flow_example():
+    out_raw, loss_raw = ema(student_input, ema_args = (teacher_input,), auto_normalize_ema_args = False)
+    assert is_tensor(loss_raw)
+
+@pytest.mark.parametrize('ema_args_type', ('tuple', 'raw'))
+def test_self_flow_example(ema_args_type):
 
     class Layer(nn.Module):
         def __init__(self, dim):
@@ -239,7 +249,12 @@ def test_self_flow_example():
     student_input = torch.randn(2, 64)
     teacher_input = torch.randn(2, 64)
 
-    out, repr_loss = self_flow_ema(student_input, ema_args = (teacher_input,))
+    if ema_args_type == 'tuple':
+        ema_args = (teacher_input,)
+    else:
+        ema_args = teacher_input
+
+    out, repr_loss = self_flow_ema(student_input, ema_args = ema_args)
 
     assert is_tensor(repr_loss)
     repr_loss.backward()

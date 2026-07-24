@@ -208,7 +208,7 @@ ema = EMAModuleWrapper(
 For multi-view SSL (where student and teacher receive different augmented views), pass `ema_args` or `ema_kwargs`:
 
 ```python
-out, loss = ema(student_input, ema_args = (teacher_input,))
+out, loss = ema(student_input, ema_args = teacher_input)
 ```
 
 ## Citations
