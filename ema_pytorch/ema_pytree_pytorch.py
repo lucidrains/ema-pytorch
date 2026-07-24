@@ -5,12 +5,15 @@ from copy import deepcopy
 from functools import partial
 
 import torch
-from torch import nn, Tensor
+from torch import nn, Tensor, is_tensor
 from torch.nn import Module
 from torch.utils import _pytree as pytree_pkg
 
 def exists(val):
     return val is not None
+
+def default(val, d):
+    return val if exists(val) else (d() if callable(d) else d)
 
 def divisible_by(num, den):
     return (num % den) == 0
@@ -66,7 +69,7 @@ class EMAPytree(Module):
 
         ema_tensors, _ = pytree_pkg.tree_flatten(self.ema_pytree)
         for p in ema_tensors:
-            if isinstance(p, Tensor):
+            if is_tensor(p):
                 p.detach_()
 
         # tensor update functions
@@ -94,6 +97,10 @@ class EMAPytree(Module):
     def pytree(self):
         return self.online_pytree[0]
 
+    @property
+    def ema_model(self):
+        return self.ema_pytree
+
     def copy_params_from_pytree_to_ema(self):
         copy = self.inplace_copy
 
@@ -101,7 +108,7 @@ class EMAPytree(Module):
         online_tensors, _ = pytree_pkg.tree_flatten(self.pytree)
 
         for ma_tensor, online_tensor in zip(ema_tensors, online_tensors):
-            if isinstance(ma_tensor, Tensor) and isinstance(online_tensor, Tensor):
+            if is_tensor(ma_tensor) and is_tensor(online_tensor):
                 copy(ma_tensor.data, online_tensor.data)
 
     def get_current_decay(self):
@@ -136,45 +143,16 @@ class EMAPytree(Module):
         if self.is_frozen:
             return
 
-        if not exists(current_decay):
-            current_decay = self.get_current_decay()
+        current_decay = default(current_decay, self.get_current_decay)
 
         ema_tensors, _ = pytree_pkg.tree_flatten(ma_pytree)
         online_tensors, _ = pytree_pkg.tree_flatten(current_pytree)
 
         for ma_tensor, online_tensor in zip(ema_tensors, online_tensors):
-            if isinstance(ma_tensor, Tensor) and isinstance(online_tensor, Tensor):
+            if is_tensor(ma_tensor) and is_tensor(online_tensor):
                 self.inplace_lerp(ma_tensor.data, online_tensor.data, 1. - current_decay)
 
     def __call__(self, *args, **kwargs):
         if callable(self.ema_pytree):
             return self.ema_pytree(*args, **kwargs)
         return self.ema_pytree
-
-if __name__ == '__main__':
-    online_tree = {
-        'w': torch.randn(2, 2),
-        'b': torch.randn(2)
-    }
-
-    ema_tree = EMAPytree(
-        online_tree,
-        beta = 0.5,
-        min_value = 0.5,
-        update_after_step = 0,
-        update_every = 1
-    )
-
-    ema_tree.update() # init copy
-
-    with torch.no_grad():
-        online_tree['w'].fill_(1.0)
-        online_tree['b'].fill_(1.0)
-
-    old_ema_w = ema_tree.ema_pytree['w'].clone()
-    ema_tree.update() # lerp
-
-    expected_w = 0.5 * old_ema_w + 0.5 * online_tree['w']
-    assert torch.allclose(ema_tree.ema_pytree['w'], expected_w)
-    
-    print('success')

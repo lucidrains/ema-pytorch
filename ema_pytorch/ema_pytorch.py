@@ -8,8 +8,13 @@ import torch
 from torch import nn, Tensor
 from torch.nn import Module
 
+from ema_pytorch.ema_pytree_pytorch import EMAPytree
+
 def exists(val):
     return val is not None
+
+def default(val, d):
+    return val if exists(val) else (d() if callable(d) else d)
 
 def divisible_by(num, den):
     return (num % den) == 0
@@ -61,6 +66,12 @@ class EMA(Module):
         power (float): Exponential factor of EMA warmup. Default: 2/3.
         min_value (float): The minimum EMA decay rate. Default: 0.
     """
+
+    def __new__(cls, model, *args, **kwargs):
+        if not isinstance(model, Module):
+            return EMAPytree(model, *args, **kwargs)
+
+        return super().__new__(cls)
 
     def __init__(
         self,
@@ -249,8 +260,7 @@ class EMA(Module):
             copy(current_buffers.data, ma_buffers.data)
 
     def update_model_with_ema(self, decay = None):
-        if not exists(decay):
-            decay = self.update_model_with_ema_beta
+        decay = default(decay, self.update_model_with_ema_beta)
 
         if decay == 0.:
             return self.copy_params_from_ema_to_model()
@@ -302,8 +312,7 @@ class EMA(Module):
 
         # get current decay
 
-        if not exists(current_decay):
-            current_decay = self.get_current_decay()
+        current_decay = default(current_decay, self.get_current_decay)
 
         # store all source and target tensors to copy or lerp
 

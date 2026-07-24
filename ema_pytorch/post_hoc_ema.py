@@ -377,8 +377,6 @@ class PostHocEMA(Module):
             **self.ema_kwargs
         )
 
-        synthesized_ema_model
-
         # get all checkpoints
 
         gammas = []

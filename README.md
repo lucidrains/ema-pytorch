@@ -111,6 +111,106 @@ ema.update_model_with_ema()
 
 ```
 
+## Target Representation Routing
+
+When dealing with nested module trees (e.g. self-supervised learning), you can wrap your network with `EMAModuleWrapper`.
+
+The specified online submodules will automatically receive the target EMA submodules' outputs passed directly into their `forward` pass keyword arguments (defaulting to `ema_output`, or customized per module).
+
+```python
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+from ema_pytorch import EMAModuleWrapper
+
+class Block(nn.Module):
+    def __init__(self, dim):
+        super().__init__()
+        self.net = nn.Linear(dim, dim)
+        self.proj = nn.Linear(dim, dim)
+        self.register_buffer('zero', torch.tensor(0.), persistent = False)
+
+    def forward(self, x, ema_output = None):
+        h = F.relu(self.net(x))
+
+        if ema_output is None:
+            return h, self.zero
+
+        if isinstance(ema_output, tuple):
+            ema_output, _ = ema_output
+
+        pred = self.proj(h)
+        loss = 1. - F.cosine_similarity(pred, ema_output, dim = -1).mean()
+
+        return h, loss
+
+class NestedBranch(nn.Module):
+    def __init__(self, dim):
+        super().__init__()
+        self.block1 = Block(dim)
+        self.block2 = Block(dim)
+
+    def forward(self, x):
+        x, loss1 = self.block1(x)
+        x, loss2 = self.block2(x)
+        return x, loss1 + loss2
+
+class DoubleNestedModel(nn.Module):
+    def __init__(self, dim = 512):
+        super().__init__()
+        self.branch_a = NestedBranch(dim)
+        self.branch_b = NestedBranch(dim)
+
+    def forward(self, x):
+        h_a, loss_a = self.branch_a(x)
+        h_b, loss_b = self.branch_b(h_a)
+        return h_b, loss_a + loss_b
+
+model = DoubleNestedModel()
+
+# branch_a nested blocks predict branch_b EMA teacher outputs
+
+ema = EMAModuleWrapper(
+    model,
+    beta = 0.99,
+    ema_module_kwargs = {
+        'branch_a.block1': 'branch_b.block1',
+        'branch_a.block2': 'branch_b.block2'
+    }
+)
+
+x = torch.randn(2, 512)
+
+# forwarding automatically injects EMA outputs into specified submodules
+
+out, loss = ema(x)
+
+loss.backward()
+ema.update()
+```
+
+You can also customize the keyword argument name, transform captured outputs, or define custom submodule mappings:
+
+```python
+ema = EMAModuleWrapper(
+    model,
+    beta = 0.99,
+    ema_module_kwargs = {
+        'deep.nested.branch_a': {
+            'ema_module_path': 'deep.nested.branch_b',
+            'ema_kwarg': 'teacher_latent'
+        }
+    }
+)
+```
+
+For multi-view SSL (where student and teacher receive different augmented views), pass `ema_args` or `ema_kwargs`:
+
+```python
+out, loss = ema(student_input, ema_args = (teacher_input,))
+```
+
 ## Citations
 
 ```bibtex
