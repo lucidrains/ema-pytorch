@@ -24,13 +24,32 @@ def maybe_coerce_dtype(t, dtype):
 
     return t.to(dtype)
 
-def inplace_copy(tgt: Tensor, src: Tensor, *, coerce_dtype = False):
+def inplace_copy(
+    tgt: Tensor,
+    src: Tensor,
+    *,
+    auto_move_device = False,
+    coerce_dtype = False
+):
+    if auto_move_device:
+        src = src.to(tgt.device)
+
     if coerce_dtype:
         src = maybe_coerce_dtype(src, tgt.dtype)
 
     tgt.copy_(src)
 
-def inplace_lerp(tgt: Tensor, src: Tensor, weight, *, coerce_dtype = False):
+def inplace_lerp(
+    tgt: Tensor,
+    src: Tensor,
+    weight,
+    *,
+    auto_move_device = False,
+    coerce_dtype = False
+):
+    if auto_move_device:
+        src = src.to(tgt.device)
+
     if coerce_dtype:
         src = maybe_coerce_dtype(src, tgt.dtype)
 
@@ -47,6 +66,7 @@ class EMAPytree(Module):
         inv_gamma = 1.0,
         power = 2 / 3,
         min_value = 0.0,
+        allow_different_devices = False,
         coerce_dtype = False,
     ):
         super().__init__()
@@ -74,8 +94,11 @@ class EMAPytree(Module):
 
         # tensor update functions
 
-        self.inplace_copy = partial(inplace_copy, coerce_dtype = coerce_dtype)
-        self.inplace_lerp = partial(inplace_lerp, coerce_dtype = coerce_dtype)
+        self.allow_different_devices = allow_different_devices
+        self.coerce_dtype = coerce_dtype
+
+        self.inplace_copy = partial(inplace_copy, auto_move_device = allow_different_devices, coerce_dtype = coerce_dtype)
+        self.inplace_lerp = partial(inplace_lerp, auto_move_device = allow_different_devices, coerce_dtype = coerce_dtype)
 
         # updating hyperparameters
 
@@ -85,8 +108,6 @@ class EMAPytree(Module):
         self.inv_gamma = inv_gamma
         self.power = power
         self.min_value = min_value
-
-        self.coerce_dtype = coerce_dtype
 
         # init and step states
 
@@ -109,7 +130,7 @@ class EMAPytree(Module):
 
         for ma_tensor, online_tensor in zip(ema_tensors, online_tensors):
             if is_tensor(ma_tensor) and is_tensor(online_tensor):
-                copy(ma_tensor.data, online_tensor.data)
+                copy(ma_tensor.data, online_tensor.detach())
 
     def get_current_decay(self):
         epoch = (self.step - self.update_after_step - 1).clamp(min = 0.)
@@ -150,9 +171,11 @@ class EMAPytree(Module):
 
         for ma_tensor, online_tensor in zip(ema_tensors, online_tensors):
             if is_tensor(ma_tensor) and is_tensor(online_tensor):
-                self.inplace_lerp(ma_tensor.data, online_tensor.data, 1. - current_decay)
+                self.inplace_lerp(ma_tensor.data, online_tensor.detach(), 1. - current_decay)
 
     def __call__(self, *args, **kwargs):
         if callable(self.ema_pytree):
             return self.ema_pytree(*args, **kwargs)
         return self.ema_pytree
+
+EMATensor = EMAPytree

@@ -1,6 +1,6 @@
 [project]
 name = "ema-pytorch"
-version = "0.8.2"
+version = "0.8.3"
 description = "Easy way to keep track of exponential moving average version of your pytorch module"
 authors = [
     { name = "Phil Wang", email = "lucidrains@gmail.com" }

@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from ema_pytorch import EMA, PostHocEMA
+from ema_pytorch import EMA, EMAPytree, EMATensor, PostHocEMA
 
 def exists(val):
     return val is not None
@@ -100,3 +100,28 @@ def test_ema_tensor_pytree():
 
     expected_w = 0.5 * old_ema_w + 0.5 * online_tree['w']
     assert torch.allclose(ema.ema_model['w'], expected_w)
+
+def test_ema_tensor_detach_and_device():
+    tensor1 = torch.randn(10, 10, requires_grad = True)
+    tensor2 = torch.randn(10, 10, requires_grad = True)
+
+    ema = EMATensor(
+        (tensor1, tensor2),
+        beta = 0.5,
+        update_after_step = 0,
+        update_every = 1,
+        allow_different_devices = True
+    )
+
+    ema_tensor1, ema_tensor2 = ema.ema_model
+    assert not ema_tensor1.requires_grad
+    assert not ema_tensor2.requires_grad
+
+    loss = (tensor1 ** 2).sum() + (tensor2 ** 2).sum()
+    loss.backward()
+
+    ema.update()
+
+    ema_tensor1, ema_tensor2 = ema.ema_model
+    assert not ema_tensor1.requires_grad
+    assert not ema_tensor2.requires_grad
