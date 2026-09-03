@@ -74,6 +74,17 @@ def test_readme_switch_ema():
     for _ in range(5):
         ema.update()
 
+def test_forward_eval_temporarily_disables_training_layers():
+    model = nn.Dropout(p = 0.5)
+    ema = EMA(model)
+    ema.ema_model.train()
+
+    inputs = torch.ones(128)
+    outputs = ema.forward_eval(inputs)
+
+    assert torch.equal(outputs, inputs)
+    assert ema.ema_model.training
+
 def test_ema_tensor_pytree():
 
     online_tree = {

@@ -221,9 +221,12 @@ class EMA(Module):
     def forward_eval(self, *args, **kwargs):
         # handy function for invoking ema model with no grad + eval
         training = self.ema_model.training
-        out = self.ema_model(*args, **kwargs)
-        self.ema_model.train(training)
-        return out
+        self.ema_model.eval()
+
+        try:
+            return self.ema_model(*args, **kwargs)
+        finally:
+            self.ema_model.train(training)
 
     def restore_ema_model_device(self):
         device = self.initted.device
