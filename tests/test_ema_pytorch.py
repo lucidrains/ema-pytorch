@@ -1,4 +1,5 @@
 from __future__ import annotations
+import pytest
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -125,3 +126,52 @@ def test_ema_tensor_detach_and_device():
     ema_tensor1, ema_tensor2 = ema.ema_model
     assert not ema_tensor1.requires_grad
     assert not ema_tensor2.requires_grad
+
+
+@pytest.mark.parametrize('training', [True, False])
+def test_forward_eval_disables_dropout(training):
+    model = nn.Sequential(nn.Linear(2, 2, bias = False), nn.Dropout(p = 1.))
+    with torch.no_grad():
+        model[0].weight.copy_(torch.eye(2))
+
+    ema = EMA(model)
+    ema.ema_model.train(training)
+    data = torch.ones(3, 2, requires_grad = True)
+    output = ema.forward_eval(input = data)
+
+    torch.testing.assert_close(output, data)
+    assert not output.requires_grad
+    assert ema.ema_model.training is training
+    assert model.training
+
+
+@pytest.mark.parametrize('training', [True, False])
+@pytest.mark.parametrize('batch_size', [1, 4])
+def test_forward_eval_preserves_batchnorm_statistics(training, batch_size):
+    model = nn.BatchNorm1d(2)
+    ema = EMA(model)
+    data = torch.arange(1., 2 * batch_size + 1).reshape(batch_size, 2)
+    ema.ema_model.eval()
+    with torch.no_grad():
+        expected = ema.ema_model(data)
+    ema.ema_model.train(training)
+    before = {name: value.clone() for name, value in ema.ema_model.named_buffers()}
+
+    output = ema.forward_eval(data)
+
+    torch.testing.assert_close(output, expected)
+    for name, value in ema.ema_model.named_buffers():
+        torch.testing.assert_close(value, before[name], rtol = 0, atol = 0)
+    assert ema.ema_model.training is training
+    assert model.training
+
+
+@pytest.mark.parametrize('training', [True, False])
+def test_forward_eval_restores_mode_on_error(training):
+    ema = EMA(nn.Linear(2, 1))
+    ema.ema_model.train(training)
+
+    with pytest.raises(RuntimeError, match = 'shapes cannot be multiplied'):
+        ema.forward_eval(torch.ones(1, 3))
+
+    assert ema.ema_model.training is training
